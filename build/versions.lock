@@ -1,0 +1,12 @@
+# build/versions.lock
+#
+# `build/versions.env`의 핀 박은 업스트림 버전들로 빌드했을 때 나온 산출물 SHA-256.
+# 재빌드 후 값이 바뀌면 (a) 업스트림 태르볼이 바뀐 것 (b) 빌드 환경이 결정적이지
+# 않은 것 (c) emsdk/툴체인 업데이트가 반영된 것 — 중 하나. 의도된 변경이면 이 파일
+# 같이 업데이트하고, 아니면 원인을 찾아야 한다.
+#
+# 비교:  shasum -a 256 packages/gif2webp/wasm/gif2webp.{wasm,mjs}
+
+[gif2webp @ emsdk=3.1.74 libwebp=1.6.0 giflib=5.2.2 platform=linux/amd64 env=web,worker,node]
+gif2webp.wasm = 8a02f894632754376fa53b69edd489da4a4a91a284106deb56085466808ff6d2
+gif2webp.mjs  = 621a6ee4b3224d1b3274d90537f2acd8f5054cb81a175c99480c608b1bc54462
