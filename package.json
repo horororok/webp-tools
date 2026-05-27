@@ -1,0 +1,21 @@
+{
+  "name": "webp-tools",
+  "version": "0.0.0",
+  "private": true,
+  "description": "WASM builds of libwebp tools that browsers can't do natively, published as @btheegg-kimth/* packages.",
+  "license": "MIT",
+  "packageManager": "pnpm@11.3.0",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build:wasm": "bash build/build-docker.sh",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.0",
+    "typescript": "^6.0.3"
+  }
+}
