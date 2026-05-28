@@ -58,16 +58,22 @@ build/
   versions.env      # 핀 박은 버전들
 packages/gif2webp/
   src/index.ts      # 타입 래퍼: gif2webp(Uint8Array, opts) -> Uint8Array
-  wasm/             # 커밋되는 빌드 산출물 (gif2webp.mjs + .wasm)
+  wasm/             # 커밋되는 빌드 산출물 (gif2webp.mjs — wasm 인라인됨)
   licenses/         # 업스트림 라이선스 전문 (빌드가 채움)
 ```
 
 빌드 흐름: giflib → `libgif.a` (emcc/emar); libwebp는 `emcmake cmake`로
-`WEBP_BUILD_GIF2WEBP=ON`만 켜서; gif2webp를
+`WEBP_BUILD_GIF2WEBP=ON` + `WEBP_USE_THREAD=OFF`(pthread 비활성); gif2webp를
 `MODULARIZE + EXPORT_ES6 + EXPORTED_RUNTIME_METHODS=callMain,FS + INVOKE_RUN=0`,
-`ENVIRONMENT=web,worker,node`로 WASM ES 모듈로 링크. 래퍼는 가상 FS로 구동:
-`input.gif` 쓰기 → `callMain(args)` → `output.webp` 읽기. 호출은 mutex로 직렬화
-(가상 FS 공유 + callMain 글로벌 상태 때문).
+`SINGLE_FILE=1`(wasm을 base64로 mjs에 인라인), `ENVIRONMENT=web,worker,node`로
+WASM ES 모듈로 링크. 래퍼는 가상 FS로 구동: `input.gif` 쓰기 → `callMain(args)`
+→ `output.webp` 읽기. 호출은 mutex로 직렬화 (가상 FS 공유 + callMain 글로벌
+상태 때문).
+
+**pthread 비활성 + SINGLE_FILE 결정의 근거** (0.0.1 → 0.0.2): pthread 빌드는
+COOP/COEP 헤더 + SharedArrayBuffer + Worker 파일 별도 호스팅을 요구해 일반
+Vite/Next 환경에서 못 씀. gif2webp는 짧은 단일 변환이라 멀티스레드 이득이
+배포 비용보다 작음. SINGLE_FILE은 .wasm을 별도 파일로 두지 않아 번들러 친화.
 
 ## 현재 상태 (2026-05-27)
 

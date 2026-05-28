@@ -230,6 +230,7 @@ cp COPYING "$OUT/libwebp-LICENSE.txt"
 # 핵심: gif2webp 실행물에 적용될 링커 플래그.
 # - MODULARIZE + EXPORT_ES6 -> .mjs ES 모듈
 # - callMain + FS 노출 + INVOKE_RUN=0 -> JS에서 가상 FS로 구동
+# - SINGLE_FILE=1 -> wasm을 mjs에 base64로 인라인 (별도 .wasm 파일 X)
 # - ENVIRONMENT=web,worker,node -> 브라우저 + Worker + Node 모두 지원
 EM_LINK="-O3 \
   -sMODULARIZE=1 \
@@ -240,6 +241,7 @@ EM_LINK="-O3 \
   -sEXIT_RUNTIME=0 \
   -sALLOW_MEMORY_GROWTH=1 \
   -sFORCE_FILESYSTEM=1 \
+  -sSINGLE_FILE=1 \
   -sENVIRONMENT=web,worker,node"
 
 emcmake cmake -B build -S . \
@@ -255,19 +257,24 @@ emcmake cmake -B build -S . \
   -DWEBP_BUILD_ANIM_UTILS=OFF \
   -DWEBP_BUILD_EXTRAS=OFF \
   -DWEBP_BUILD_WEBP_JS=OFF \
+  -DWEBP_USE_THREAD=OFF \
   -DGIF_INCLUDE_DIR="$GIF_PREFIX/include" \
   -DGIF_LIBRARY="$GIF_PREFIX/lib/libgif.a" \
   -DCMAKE_EXE_LINKER_FLAGS="$EM_LINK"
 
 emmake cmake --build build --target gif2webp -j"$(nproc)"
 
+# SINGLE_FILE=1이면 .js만 생성됨 (wasm 인라인). .wasm 파일은 없음.
 JS=$(find build -name 'gif2webp.js' -print -quit)
-WASM=$(find build -name 'gif2webp.wasm' -print -quit)
-cp "$JS"   "$OUT/gif2webp.mjs"   # EXPORT_ES6 출력은 .mjs로 배포
-cp "$WASM" "$OUT/gif2webp.wasm"
+cp "$JS" "$OUT/gif2webp.mjs"   # EXPORT_ES6 출력은 .mjs로 배포
 
-sha256sum "$OUT/gif2webp.wasm" "$OUT/gif2webp.mjs"
+sha256sum "$OUT/gif2webp.mjs"
 ```
+
+**왜 `WEBP_USE_THREAD=OFF` + `SINGLE_FILE=1`인가?** (이 결정의 자세한 근거는
+[8.9](#89-pthread-함정-필수-체크) 참고). 한 줄 요약: pthread 빌드는 일반
+Vite/Webpack/Next 환경에서 못 쓰고, SINGLE_FILE은 별도 `.wasm` 호스팅 부담을
+없애 모든 번들러에서 단일 `.mjs` import만으로 동작.
 
 ### 2.4 `build/build-docker.sh` (호스트에서 실행)
 
@@ -768,6 +775,35 @@ colima start
 
 **해결:** 래퍼에서 호출 직렬화 mutex (위 [3.2](#32-전체-코드) 참고). wasm은 단일
 스레드라 직렬화해도 처리량 손실 없음.
+
+### 8.9 pthread 함정 (필수 체크)
+
+**증상 (브라우저, 0.0.1 publish 후 발견):**
+- Vite parse 에러: `new Worker(new URL("gif2webp.js", import.meta.url), workerOptions)` —
+  `workerOptions`가 변수라 정적 분석 불가, `vite-worker-import-meta-url` 플러그인이 거부
+- 런타임 404: emit된 Worker가 `gif2webp.js`를 fetch하는데 우리는 `.mjs`로 rename해서 배포
+- `SharedArrayBuffer is not defined` — COOP/COEP 헤더 필요한데 일반 SPA엔 없음
+
+**원인:** EM_LINK에 `-pthread` 안 넣었더라도 **libwebp의 CMake가 자동으로 pthread를
+켬.** 빌드 산출물에 `isPthread`, `GROWABLE_HEAP_*`, `wasmMemory({shared: true})` 같은
+마커 등장하면 확정.
+
+**해결:** cmake에 `-DWEBP_USE_THREAD=OFF` 명시. 추가로 `SINGLE_FILE=1`까지 켜면
+번들러가 `.wasm` 별도 호스팅을 신경 쓸 필요도 없어짐 (한 .mjs로 자체완결).
+
+**확인 방법:** 빌드 후 산출물에서:
+
+```sh
+grep -c isPthread packages/gif2webp/wasm/gif2webp.mjs
+grep -c 'new Worker' packages/gif2webp/wasm/gif2webp.mjs
+grep -cE 'WebAssembly\.Memory.*shared' packages/gif2webp/wasm/gif2webp.mjs
+```
+
+모두 0이어야 일반 브라우저 환경에서 동작. **publish 전에 반드시 확인할 것.** 더
+정확한 검증은 실제 Vite 앱을 만들어 import해보는 것.
+
+**`-mt` 옵션 wrapper에서 제거:** pthread 끄면 `-mt` 플래그가 무의미 — 옵션 그대로
+두면 사용자에게 거짓 신호. 옵션 제거 (0.x 단계라 breaking 허용).
 
 ### 8.8 npm publish 시 LICENSE 누락
 
