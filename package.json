@@ -12,7 +12,7 @@
     "build:wasm": "bash build/build-docker.sh",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "smoke": "node scripts/smoke.mjs"
+    "qa": "pnpm -r build && pnpm --filter playground dev"
   },
   "devDependencies": {
     "tsdown": "^0.22.0",

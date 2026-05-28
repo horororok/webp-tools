@@ -1,10 +1,7 @@
 import { defineConfig } from "vite";
 
-export default defineConfig({
-  // gif2webp의 dist/index.mjs는 ../wasm/gif2webp.mjs(600KB base64 인라인)를
-  // dynamic import한다. Vite의 의존성 pre-bundle(esbuild)이 이걸 미리 삼키려다
-  // 깨질 수 있어 제외. 소비자도 동일 설정이 필요할 수 있어 여기서 검증.
-  optimizeDeps: {
-    exclude: ["@btheegg-kimth/gif2webp"],
-  },
-});
+// 특별한 설정 불필요. 라이브러리가 ENVIRONMENT=web,worker(node 제외) + SINGLE_FILE로
+// 빌드돼서 소비자는 optimizeDeps.exclude 같은 우회 없이 그냥 import하면 됨.
+// (node를 넣으면 import("module")이 박혀 "Module externalized" 경고가 나고 exclude를
+//  강요받음 — 그래서 뺐다. build/build.sh 참고.)
+export default defineConfig({});

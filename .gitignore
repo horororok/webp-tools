@@ -5,9 +5,12 @@ npm-debug.log*
 .pnpm-debug.log*
 .pnpm-store/
 
-# tsup / typescript 산출물 (소스에서 재생성)
+# tsdown / typescript 산출물 (소스에서 재생성)
 dist/
 *.tsbuildinfo
+
+# npm pack 산출물 (QA용 임시 tarball)
+*.tgz
 
 # 에디터/OS
 .DS_Store
