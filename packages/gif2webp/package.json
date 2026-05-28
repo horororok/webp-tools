@@ -1,6 +1,6 @@
 {
   "name": "@btheegg-kimth/gif2webp",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Animated GIF -> animated WebP in the browser, via libwebp gif2webp compiled to WASM.",
   "license": "MIT",
   "author": "btheegg-kimth",

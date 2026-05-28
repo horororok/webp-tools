@@ -36,13 +36,15 @@ const blob = new Blob([webpBytes], { type: "image/webp" });
 | `lossy` / `lossless` | `-lossy` / `-lossless` | |
 | `minimizeSize` | `-min_size` | |
 | `metadata` | `-metadata` | `all` \| `none` \| `icc` \| `xmp` |
-| `multiThreaded` | `-mt` | |
 | `loopCount` | `-loop_count` | |
 | `extraArgs` | — | 원시 전달 |
 
 ## 비고
 
-- WASM(~1~2 MB)은 첫 호출 때 lazy 로드됩니다. 업로드 경로에서만 `gif2webp`를
-  import하면 메인 번들이 부풀지 않습니다.
+- WASM은 단일 `.mjs`에 인라인돼 있으며(`SINGLE_FILE=1`), 첫 호출 때 lazy 로드됩
+  니다. 업로드 경로에서만 `gif2webp`를 import하면 메인 번들이 부풀지 않습니다.
+- **pthread 비활성** 빌드이므로 COOP/COEP 헤더, SharedArrayBuffer 등 추가 요구사
+  항 없음 — Vite/Webpack/Next 등 일반 환경에서 그대로 동작.
+- 호출은 내부 mutex로 직렬화 — `Promise.all`로 여러 GIF를 동시 변환해도 안전.
 - libwebp(BSD-3-Clause) + giflib(MIT)로 빌드됨. `THIRD_PARTY_LICENSES.md` 참고.
 - 래퍼 코드는 MIT.

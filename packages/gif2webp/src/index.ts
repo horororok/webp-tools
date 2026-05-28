@@ -5,10 +5,9 @@
  * Emscripten 가상 파일시스템으로 프로그램을 구동한다:
  *   input.gif 쓰기  ->  callMain([...args])  ->  output.webp 읽기
  *
- * 비고(provisional): emit된 Emscripten glue(`wasm/gif2webp.mjs`)의 정확한 모양은
- * 첫 빌드 성공 후에야 확정된다. 아래 로더는 표준 MODULARIZE + EXPORT_ES6 출력을
- * 가정한다(팩토리가 default export이고 .wasm을 자기 기준으로 해석). 첫 빌드가 다른
- * 모양을 emit하면, 여기가 바로 수정할 한 군데다.
+ * wasm은 SINGLE_FILE=1로 빌드돼 glue(.mjs)에 base64로 인라인됨 — 소비자는 별도
+ * .wasm 파일 호스팅/번들링 신경 안 써도 됨. pthread는 비활성이라 COOP/COEP
+ * 헤더, SharedArrayBuffer 모두 불필요.
  */
 
 export interface Gif2WebpOptions {
@@ -26,8 +25,6 @@ export interface Gif2WebpOptions {
   minimizeSize?: boolean;
   /** 유지할 메타데이터 (-metadata). 기본 동작은 CLI를 따름. */
   metadata?: "all" | "none" | "icc" | "xmp";
-  /** 가능하면 멀티스레딩 사용 (-mt). */
-  multiThreaded?: boolean;
   /** 출력 애니메이션의 루프 횟수 (-loop_count N). */
   loopCount?: number;
   /** 탈출구: 추가 원시 CLI 인자를 그대로 덧붙임. */
@@ -43,7 +40,6 @@ function toArgs(opts: Gif2WebpOptions): string[] {
   if (opts.lossy) a.push("-lossy");
   if (opts.lossless) a.push("-lossless");
   if (opts.minimizeSize) a.push("-min_size");
-  if (opts.multiThreaded) a.push("-mt");
   if (opts.quality != null) a.push("-q", String(opts.quality));
   if (opts.method != null) a.push("-m", String(opts.method));
   if (opts.metadata != null) a.push("-metadata", opts.metadata);
@@ -67,8 +63,9 @@ let modulePromise: Promise<EmscriptenModule> | null = null;
 
 async function getModule(): Promise<EmscriptenModule> {
   if (!modulePromise) {
-    // Emscripten ES 모듈은 gif2webp.wasm 옆에 위치하며 import.meta.url로 그것을
-    // 해석한다. tsdown 번들에서 external로 제외함(tsdown.config.js의 deps.neverBundle).
+    // SINGLE_FILE=1로 빌드된 ES 모듈. wasm 바이트가 base64로 인라인돼 있어 별도
+    // .wasm 파일 fetch 없이 자체 완결. tsdown 번들에서 external로 제외함
+    // (tsdown.config.js의 deps.neverBundle).
     // @ts-expect-error - 빌드가 emit, 타입 없음
     const factory = (await import("../wasm/gif2webp.mjs")).default;
     modulePromise = factory() as Promise<EmscriptenModule>;

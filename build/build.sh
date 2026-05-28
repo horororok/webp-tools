@@ -55,6 +55,13 @@ cp COPYING "$OUT/libwebp-LICENSE.txt" 2>/dev/null || true
 # gif2webp가 유일하게 빌드되는 실행물(다른 도구 전부 OFF)이므로, 전역 EXE 링커
 # 플래그가 이 하나에만 적용된다. callMain + FS를 노출하고 자동 실행을 끄면 JS
 # 래퍼가 구동: input.gif 쓰기 -> callMain(args) -> 가상 FS에서 output.webp 읽기.
+#
+# SINGLE_FILE=1: wasm을 mjs glue에 base64로 인라인. 소비자가 별도 .wasm 파일을
+#   호스팅/번들링 신경 안 써도 됨. ~33% 사이즈 오버헤드(gzip 후 거의 무시 가능)
+#   대신 Vite/Webpack/Next 등 어느 번들러에서도 단일 .mjs import만으로 동작.
+# pthread는 의도적으로 비활성 (-DWEBP_USE_THREAD=OFF). gif2webp는 짧은 단일
+#   변환이라 멀티스레드 이득보다 배포 비용(COOP/COEP, SharedArrayBuffer, Worker
+#   파일 별도 호스팅)이 훨씬 큼.
 EM_LINK="-O3 \
   -sMODULARIZE=1 \
   -sEXPORT_ES6=1 \
@@ -64,6 +71,7 @@ EM_LINK="-O3 \
   -sEXIT_RUNTIME=0 \
   -sALLOW_MEMORY_GROWTH=1 \
   -sFORCE_FILESYSTEM=1 \
+  -sSINGLE_FILE=1 \
   -sENVIRONMENT=web,worker,node"
 
 emcmake cmake -B build -S . \
@@ -79,23 +87,21 @@ emcmake cmake -B build -S . \
   -DWEBP_BUILD_ANIM_UTILS=OFF \
   -DWEBP_BUILD_EXTRAS=OFF \
   -DWEBP_BUILD_WEBP_JS=OFF \
+  -DWEBP_USE_THREAD=OFF \
   -DGIF_INCLUDE_DIR="$GIF_PREFIX/include" \
   -DGIF_LIBRARY="$GIF_PREFIX/lib/libgif.a" \
   -DCMAKE_EXE_LINKER_FLAGS="$EM_LINK"
 
 emmake cmake --build build --target gif2webp -j"$(nproc)"
 
-# emscripten은 실행 타겟에 대해 <name>.js + <name>.wasm 를 emit 한다.
+# SINGLE_FILE=1이면 emscripten은 .js만 emit한다 (.wasm은 인라인됨).
 JS=$(find build -name 'gif2webp.js' -print -quit || true)
-WASM=$(find build -name 'gif2webp.wasm' -print -quit || true)
-[ -n "$JS" ]   || { echo "ERROR: gif2webp.js 가 생성되지 않음"; exit 1; }
-[ -n "$WASM" ] || { echo "ERROR: gif2webp.wasm 가 생성되지 않음"; exit 1; }
+[ -n "$JS" ] || { echo "ERROR: gif2webp.js 가 생성되지 않음"; exit 1; }
 
 # EXPORT_ES6 출력물은 ES 모듈이므로 .mjs 로 배포한다.
-cp "$JS"   "$OUT/gif2webp.mjs"
-cp "$WASM" "$OUT/gif2webp.wasm"
+cp "$JS" "$OUT/gif2webp.mjs"
 
 echo ">> 완료. 산출물:"
 ls -la "$OUT"
 echo ">> SHA-256 (재현성 위해 기록):"
-sha256sum "$OUT/gif2webp.wasm" "$OUT/gif2webp.mjs"
+sha256sum "$OUT/gif2webp.mjs"
