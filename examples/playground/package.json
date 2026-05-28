@@ -1,0 +1,17 @@
+{
+  "name": "playground",
+  "version": "0.0.0",
+  "private": true,
+  "description": "브라우저 실측 QA 하네스. @btheegg-kimth/* 패키지가 실제 번들러(Vite) + 브라우저에서 동작하는지 확인. 절대 publish 안 됨.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@btheegg-kimth/gif2webp": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^8.0.14"
+  }
+}
