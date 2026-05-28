@@ -24,3 +24,6 @@ build/.cache/
 
 # wasm/ 와 licenses/ 는 의도적으로 커밋함(벤더링).
 # 따라서 ignore 하지 않는다.
+
+# 문서
+docs/*
