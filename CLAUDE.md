@@ -101,7 +101,7 @@ WASM ES 모듈로 링크. 래퍼는 가상 FS로 구동: `input.gif` 쓰기 → 
 
 기술적으론 배포 준비 완료. 패키지에 들어가는 파일:
 - `dist/index.mjs` + `index.d.mts` + sourcemaps (tsdown 산출물)
-- `wasm/gif2webp.{mjs,wasm}` (커밋된 emscripten 산출물)
+- `wasm/gif2webp.mjs` (커밋된 emscripten 산출물 — SINGLE_FILE=1로 wasm 인라인, 별도 .wasm 없음)
 - `licenses/{libwebp,giflib}-LICENSE.txt` (업스트림 라이선스 전문)
 - `LICENSE`, `README.md`, `THIRD_PARTY_LICENSES.md`
 
