@@ -73,8 +73,8 @@ webp-tools/
 │       ├── LICENSE
 │       ├── README.md
 │       └── THIRD_PARTY_LICENSES.md
-├── scripts/
-│   └── smoke.mjs                # E2E 검증
+├── examples/
+│   └── playground/             # private Vite 앱 — 브라우저 수동 QA (§5)
 ├── docs/
 ├── pnpm-workspace.yaml
 ├── package.json                 # 루트, private
@@ -98,7 +98,7 @@ webp-tools/
     "build:wasm": "bash build/build-docker.sh",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "smoke": "node scripts/smoke.mjs"
+    "qa": "pnpm -r build && pnpm --filter playground dev"
   },
   "devDependencies": {
     "tsdown": "^0.22.0",
@@ -231,7 +231,7 @@ cp COPYING "$OUT/libwebp-LICENSE.txt"
 # - MODULARIZE + EXPORT_ES6 -> .mjs ES 모듈
 # - callMain + FS 노출 + INVOKE_RUN=0 -> JS에서 가상 FS로 구동
 # - SINGLE_FILE=1 -> wasm을 mjs에 base64로 인라인 (별도 .wasm 파일 X)
-# - ENVIRONMENT=web,worker,node -> 브라우저 + Worker + Node 모두 지원
+# - ENVIRONMENT=web,worker -> 브라우저 + Web Worker (node 제외: §8.3 참고)
 EM_LINK="-O3 \
   -sMODULARIZE=1 \
   -sEXPORT_ES6=1 \
@@ -242,7 +242,7 @@ EM_LINK="-O3 \
   -sALLOW_MEMORY_GROWTH=1 \
   -sFORCE_FILESYSTEM=1 \
   -sSINGLE_FILE=1 \
-  -sENVIRONMENT=web,worker,node"
+  -sENVIRONMENT=web,worker"
 
 emcmake cmake -B build -S . \
   -DCMAKE_BUILD_TYPE=Release \
@@ -316,7 +316,7 @@ pnpm build:wasm
 ### 2.6 `build/versions.lock` (재현성 비교 기준)
 
 ```
-[gif2webp @ emsdk=3.1.74 libwebp=1.6.0 giflib=5.2.2 platform=linux/amd64 env=web,worker,node]
+[gif2webp @ emsdk=3.1.74 libwebp=1.6.0 giflib=5.2.2 platform=linux/amd64 env=web,worker]
 gif2webp.wasm = <빌드가 출력한 SHA-256>
 gif2webp.mjs  = <빌드가 출력한 SHA-256>
 ```
@@ -495,70 +495,59 @@ pnpm -r build
 
 ---
 
-## 5. 스모크 테스트 (`scripts/smoke.mjs`)
+## 5. QA — 브라우저 playground (Node 스모크 X)
 
-happy path 검증. 정식 단위 테스트 시스템(Vitest 등) 도입은 over-engineering — 빌드 산출물이
-정말로 입력 → 출력을 해내는지만 확인하면 충분.
+**교훈 먼저 (실제로 데인 부분):** 브라우저 전용 wasm 라이브러리는 **브라우저에서
+QA해야 한다.** Node 스크립트 스모크는 두 가지 이유로 부적합:
 
-```js
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
-import { gif2webp } from "../packages/gif2webp/dist/index.mjs";
+1. **브라우저 이슈를 못 잡음.** Node 스모크는 0.0.1의 pthread/Worker/번들러 문제를
+   전혀 못 잡았다 (Node 경로만 타니까). publish 후 소비자가 발견.
+2. **ENVIRONMENT=node를 강요.** Node 실행을 하려면 `-sENVIRONMENT`에 `node`를
+   넣어야 하는데, 그러면 glue에 `import("module")`이 박혀 소비자 Vite 빌드에서
+   "Module externalized" 경고 + `optimizeDeps.exclude` 강요 (§8.3).
 
-// 직접 인코딩한 최소 2프레임 1x1 애니메이션 GIF89a (85 바이트)
-const EMBEDDED_GIF = new Uint8Array([
-  0x47, 0x49, 0x46, 0x38, 0x39, 0x61,
-  0x01, 0x00, 0x01, 0x00, 0x80, 0x00, 0x00,
-  0xFF, 0x00, 0x00, 0x00, 0x00, 0xFF,
-  0x21, 0xFF, 0x0B,
-  0x4E, 0x45, 0x54, 0x53, 0x43, 0x41, 0x50, 0x45, 0x32, 0x2E, 0x30,
-  0x03, 0x01, 0x00, 0x00, 0x00,
-  0x21, 0xF9, 0x04, 0x04, 0x0A, 0x00, 0x00, 0x00,
-  0x2C, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
-  0x02, 0x02, 0x44, 0x01, 0x00,
-  0x21, 0xF9, 0x04, 0x04, 0x0A, 0x00, 0x00, 0x00,
-  0x2C, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00,
-  0x02, 0x02, 0x4C, 0x01, 0x00,
-  0x3B,
-]);
+→ 결론: `ENVIRONMENT=web,worker`로 빌드하고, QA는 **모노레포 안 private Vite
+playground**로 실제 브라우저에서.
 
-function findChunks(webp, fourcc) {
-  const target = new TextEncoder().encode(fourcc);
-  let count = 0;
-  outer: for (let i = 0; i <= webp.length - target.length; i++) {
-    for (let j = 0; j < target.length; j++) {
-      if (webp[i + j] !== target[j]) continue outer;
-    }
-    count++;
-  }
-  return count;
-}
+### 5.1 playground 구조
 
-const argPath = process.argv[2];
-const input = argPath
-  ? new Uint8Array(await readFile(resolve(argPath)))
-  : EMBEDDED_GIF;
-
-const out = await gif2webp(input, { quality: 75 });
-
-const head = new TextDecoder("ascii").decode(out.subarray(0, 4));
-const fmt = new TextDecoder("ascii").decode(out.subarray(8, 12));
-if (head !== "RIFF" || fmt !== "WEBP") throw new Error("magic 불일치");
-
-if (findChunks(out, "ANIM") !== 1) throw new Error("ANIM 청크 없음");
-if (findChunks(out, "ANMF") < 2) throw new Error("프레임 부족");
-
-console.log("PASS");
+```
+examples/playground/          # private: true, 절대 publish 안 됨
+├── package.json              # @btheegg-kimth/gif2webp 를 workspace:* 로 의존
+├── vite.config.ts            # 빈 설정 — 특별한 우회 불필요
+├── index.html                # file input + 결과 미리보기
+└── src/main.ts               # gif2webp() 호출 + RIFF/WEBP 매직 검증
 ```
 
-실행:
+`pnpm-workspace.yaml`에 `examples/*` 추가, playground `package.json`에:
+
+```json
+{
+  "name": "playground",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "vite", "preview": "vite preview" },
+  "dependencies": { "@btheegg-kimth/gif2webp": "workspace:*" },
+  "devDependencies": { "vite": "^8.0.14" }
+}
+```
+
+### 5.2 실행
 
 ```sh
-pnpm smoke
+pnpm qa     # = pnpm -r build && pnpm --filter playground dev
 ```
 
-**Node에서 wasm 로드되려면** `build.sh`의 `ENVIRONMENT`에 `node`가 포함돼야 함
-(`-sENVIRONMENT=web,worker,node`). 안 그러면 "fetch failed" 에러로 죽음.
+브라우저에서 열고 GIF 변환 → 결과가 화면에 뜨고 매직이 `RIFF/WEBP`면 통과.
+**publish 전 반드시 이 단계.** 0.0.1을 깨뜨린 갭이 바로 여기였다.
+
+### 5.3 왜 workspace 링크로 충분한가 (+ 한계)
+
+playground가 `workspace:*`로 의존하면 빌드된 `dist` + `wasm`을 그대로 import하므로
+**브라우저 런타임/번들러 이슈를 잡는다** (= 우리가 겪은 부류). 단, workspace 링크는
+Vite가 pre-bundle을 건너뛰므로 **소비자의 `npm install` 경로(pre-bundle)는 재현 못
+함.** 그 경로까지 확인하려면 `npm pack` → 별도 프로젝트에 설치해 테스트 (§8.3에서
+실제로 이 방법으로 검증).
 
 ---
 
@@ -718,15 +707,35 @@ curl: (22) The requested URL returned error: 404
 **해결:** `project/` 빼고 `downloads.sourceforge.net/giflib/giflib-X.Y.Z.tar.gz`. SourceForge가
 알아서 `giflib-5.x/` 서브디렉터리로 리다이렉트.
 
-### 8.3 emscripten ENVIRONMENT 누락 → Node에서 동작 안 함
+### 8.3 ENVIRONMENT에 `node`를 넣지 말 것 (소비자 Vite 경고)
 
-**증상:** Node로 스모크 돌리면 `both async and sync fetching of the wasm failed`.
+이건 우리가 한 바퀴 돌아 배운 것. 시간 순서:
 
-**원인:** `-sENVIRONMENT=web,worker`는 Node 로더 코드를 생략. emit된 glue가 fetch만 알고
-파일시스템 read 모름.
+1. 처음 `-sENVIRONMENT=web,worker`로 빌드 → Node 스모크가 `both async and sync
+   fetching of the wasm failed`로 죽음 (Node 로더 코드 없음).
+2. `node` 추가 (`web,worker,node`) → Node 스모크는 됐지만, **소비자가 `npm install`
+   후 `vite build` 하면 경고:**
+   ```
+   Module "module" has been externalized for browser compatibility,
+   imported by ".../gif2webp.mjs"
+   ```
+   원인: `node` 환경 코드에 `import("module")`(node 빌트인)이 박혀서. 소비자는
+   `optimizeDeps.exclude: ['@btheegg-kimth/gif2webp']`로 우회를 강요받음.
+3. `node` 다시 제거 (`web,worker`) → 경고 사라짐, 소비자 우회 불필요.
 
-**해결:** `node` 추가 (`-sENVIRONMENT=web,worker,node`). `.wasm` 바이트는 안 바뀌고
-`.mjs` glue에만 ~2KB 추가됨.
+**결론: 브라우저 전용 라이브러리는 `-sENVIRONMENT=web,worker` (node 빼기).**
+대신 Node 스모크가 불가능해지므로 QA는 브라우저 playground로 (§5).
+
+**검증 방법 (실제 소비자 재현):**
+```sh
+cd packages/<tool> && npm pack                     # tarball 생성
+mkdir /tmp/c && cd /tmp/c && pnpm init
+pnpm add file:/path/to/<tool>-x.y.z.tgz vite
+# vite.config는 빈 설정으로 두고:
+npx vite build    # "Module externalized" 경고 나오면 node가 박힌 것
+```
+`web,worker` 빌드면 이 경고가 안 나야 정상. (pnpm 권장 — npm은 rolldown 네이티브
+바이너리 optional-deps 버그가 있음.)
 
 ### 8.4 tsup의 TS 6.0 호환성 (tsdown은 해결됨)
 

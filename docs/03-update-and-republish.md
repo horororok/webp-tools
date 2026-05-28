@@ -44,11 +44,10 @@ npm version patch        # package.json의 version 자동 수정
 #       워크스페이스 환경에서 의도치 않게 add 될 수 있으므로 첫 몇 번은
 #       package.json만 수동 편집하는 게 안전.
 
-# (3) 빌드 + 검증
+# (3) 빌드 + 브라우저 QA
 cd ../..
-pnpm -r build
-pnpm smoke
-# 통과해야 다음으로
+pnpm qa                  # dist 빌드 + playground dev → 브라우저에서 변환 확인
+# 결과가 브라우저에 정상 표시돼야 다음으로 (Node 스모크는 web,worker라 불가)
 
 # (4) 커밋 + push (먼저!)
 git add -A
@@ -94,10 +93,9 @@ pnpm build:wasm
 # - 헤더의 emsdk/libwebp/giflib 버전 표기 업데이트
 # - 두 SHA를 새 값으로 교체
 
-# (4) 스모크 테스트
-pnpm -r build
-pnpm smoke
-# 새 wasm으로 동작 확인
+# (4) 브라우저 QA
+pnpm qa
+# 새 wasm으로 브라우저에서 변환 동작 확인
 
 # (5) 버전 올림 (수동 또는 npm version)
 # 업스트림 메이저가 올라간 거면 패키지도 minor 이상 올리는 게 정직
@@ -227,14 +225,19 @@ publish된 패키지가 실 사용 환경에서 깨진 게 발견되면:
 5. **함정을 docs에 기록.** `01-create-npm-library.md` § 흔한 함정 같은 곳에 항목 추가.
    같은 함정에 본인이 다시 빠지지 않도록 + 추후 패키지에 같은 실수 안 하도록.
 
-### 실 사례: 0.0.1 pthread 함정
+### 실 사례: 0.0.1 → 0.0.3 두 번의 브라우저 함정
 
-증상: Vite에서 import하면 parse 에러 + 런타임 404. 원인: libwebp CMake가 자동으로
-pthread를 켜서 산출물에 Worker 스폰 코드 + SharedArrayBuffer 요구가 박혀버림.
+- **0.0.1 → 0.0.2 (pthread):** Vite에서 import하면 parse 에러 + 런타임 404. 원인:
+  libwebp CMake가 자동으로 pthread를 켜서 Worker 스폰 코드 + SharedArrayBuffer 요구가
+  박힘. 해결: `-DWEBP_USE_THREAD=OFF` + `-sSINGLE_FILE=1`.
+- **0.0.2 → 0.0.3 (node env):** `ENVIRONMENT=web,worker,node`의 `node`가 glue에
+  `import("module")`을 박아 소비자 `vite build`에서 "Module externalized" 경고 +
+  `optimizeDeps.exclude` 강요. 해결: `node` 제거 (`web,worker`).
 
-해결: `-DWEBP_USE_THREAD=OFF` + `-sSINGLE_FILE=1` → 0.0.2 publish → 0.0.1 deprecate.
-배운 점: **publish 전 실 브라우저 환경(Vite 빈 앱)에서 import 한 번이라도 해볼 것.**
-스모크는 Node에서만 도니까 이 함정을 못 잡았음.
+배운 점: **Node 스크립트 스모크는 브라우저 함정을 못 잡는다** (Node 경로만 타니까).
+브라우저 전용 라이브러리는 `examples/playground`(실제 Vite + 브라우저)로 QA하고,
+소비자 경로는 `npm pack` → 별도 프로젝트 설치로 확인. 이래서 자동 Node 스모크를
+버리고 수동 브라우저 QA로 전환함.
 
 ## 5. 자동화로 갈 시점은?
 

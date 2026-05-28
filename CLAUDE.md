@@ -65,25 +65,31 @@ packages/gif2webp/
 빌드 흐름: giflib → `libgif.a` (emcc/emar); libwebp는 `emcmake cmake`로
 `WEBP_BUILD_GIF2WEBP=ON` + `WEBP_USE_THREAD=OFF`(pthread 비활성); gif2webp를
 `MODULARIZE + EXPORT_ES6 + EXPORTED_RUNTIME_METHODS=callMain,FS + INVOKE_RUN=0`,
-`SINGLE_FILE=1`(wasm을 base64로 mjs에 인라인), `ENVIRONMENT=web,worker,node`로
+`SINGLE_FILE=1`(wasm을 base64로 mjs에 인라인), `ENVIRONMENT=web,worker`로
 WASM ES 모듈로 링크. 래퍼는 가상 FS로 구동: `input.gif` 쓰기 → `callMain(args)`
 → `output.webp` 읽기. 호출은 mutex로 직렬화 (가상 FS 공유 + callMain 글로벌
 상태 때문).
 
-**pthread 비활성 + SINGLE_FILE 결정의 근거** (0.0.1 → 0.0.2): pthread 빌드는
-COOP/COEP 헤더 + SharedArrayBuffer + Worker 파일 별도 호스팅을 요구해 일반
-Vite/Next 환경에서 못 씀. gif2webp는 짧은 단일 변환이라 멀티스레드 이득이
-배포 비용보다 작음. SINGLE_FILE은 .wasm을 별도 파일로 두지 않아 번들러 친화.
+**pthread 비활성 + SINGLE_FILE + node 제외 결정의 근거:**
+- pthread 비활성 (`WEBP_USE_THREAD=OFF`, 0.0.1→0.0.2): pthread 빌드는 COOP/COEP
+  헤더 + SharedArrayBuffer + Worker 파일 별도 호스팅을 요구해 일반 Vite/Next에서
+  못 씀. gif2webp는 짧은 단일 변환이라 멀티스레드 이득 < 배포 비용.
+- SINGLE_FILE: .wasm을 별도 파일로 두지 않아 번들러 친화.
+- node 제외 (`web,worker`, 0.0.2→0.0.3): `node`를 넣으면 glue에 `import("module")`이
+  박혀 소비자 Vite 빌드에서 "Module externalized" 경고 + `optimizeDeps.exclude`를
+  강요. 브라우저 전용 라이브러리라 제거. `worker`는 남겨 소비자가 Web Worker
+  안에서 변환 가능. 트레이드오프: Node 실행 불가 → 자동 스모크 대신 수동 QA
+  (`examples/playground`, `pnpm qa`).
 
 ## 현재 상태 (2026-05-27)
 
 - ✅ 스캐폴드 + 빌드 파이프라인 + 래퍼 작성 완료
 - ✅ wasm 빌드 검증됨 (SHA: `build/versions.lock` 참조)
 - ✅ 래퍼 wasm 로딩 확정 (emit된 glue 모양과 매칭)
-- ✅ 스모크 테스트 통과 (`pnpm smoke` — 내장 GIF로 E2E)
+- ✅ 브라우저 실측 검증 (`pnpm qa` → playground에서 실 GIF 변환 확인)
 - ✅ TS 6.0 + tsdown 빌드 파이프라인 확정
-- ⏳ npm publish: `btheegg-kimth` org 생성 + `npm login` (사람만 가능, 아래)
-- ⏳ GitHub repo 푸시 (사람만 가능)
+- ✅ 0.0.1 → 0.0.2 (pthread 제거 + SINGLE_FILE) → 0.0.3 (node 제외) publish됨
+- 📌 검증은 수동 QA (`pnpm qa`) — Node 자동 스모크는 ENVIRONMENT=web,worker라 불가
 
 ## 바로 다음 작업
 
