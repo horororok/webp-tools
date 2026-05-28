@@ -664,16 +664,10 @@ npm publish                        # publishConfig.access=public 자동 적용
 
 ### 7.3 버전 올리기 (이후)
 
-```sh
-# 1. 코드 수정
-# 2. wasm 재빌드가 필요하면:
-#    - build/versions.env 갱신
-#    - pnpm build:wasm
-#    - build/versions.lock SHA 갱신
-# 3. 패키지 package.json version 올림 (semver)
-# 4. pnpm -r build && pnpm smoke
-# 5. cd packages/gif2webp && npm publish
-```
+별도 가이드: [`03-update-and-republish.md`](./03-update-and-republish.md).
+
+요약 — git → npm 순서 지키고, semver 따라 version 올리고, WASM 재빌드 시
+`versions.lock`도 같이 갱신.
 
 ---
 

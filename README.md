@@ -10,7 +10,7 @@ WebP를 네이티브 디코딩하므로, `cwebp`/`dwebp`는 **일부러** 빌드
 
 | 패키지 | 상태 | 하는 일 |
 |--------|------|---------|
-| [`@btheegg-kimth/gif2webp`](packages/gif2webp) | 빌드 중 | 애니메이션 GIF → 애니메이션 WebP |
+| [`@btheegg-kimth/gif2webp`](https://www.npmjs.com/package/@btheegg-kimth/gif2webp) ([src](packages/gif2webp)) | [![npm](https://img.shields.io/npm/v/@btheegg-kimth/gif2webp.svg)](https://www.npmjs.com/package/@btheegg-kimth/gif2webp) | 애니메이션 GIF → 애니메이션 WebP |
 | `@btheegg-kimth/img2webp` | 예정 | 프레임들 → 애니메이션 WebP |
 | `@btheegg-kimth/webpmux`  | 예정 | WebP 컨테이너 / 메타데이터 편집 |
 
@@ -74,3 +74,5 @@ npm publish            # publishConfig.access=public 가 스코프드 기본 pri
   npm public 배포까지 (이 레포가 거친 풀스택 과정)
 - [`docs/02-add-package-to-org.md`](docs/02-add-package-to-org.md) — 같은 org에 새 패키지
   추가하는 빠른 워크플로 (img2webp, webpmux 등)
+- [`docs/03-update-and-republish.md`](docs/03-update-and-republish.md) — 이미 publish된
+  패키지의 새 버전 배포 (반복 워크플로, WASM 재빌드 포함)
