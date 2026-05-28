@@ -61,6 +61,10 @@ type EmscriptenModule = {
 
 let modulePromise: Promise<EmscriptenModule> | null = null;
 
+// gif2webp CLI가 stderr로 내보내는 줄을 모아 둔다(변환 실패 시 에러 메시지에 포함).
+// 호출은 mutex로 직렬화되므로 호출 시작 시 비우면 이번 호출분만 캡처됨.
+const stderrLines: string[] = [];
+
 async function getModule(): Promise<EmscriptenModule> {
   if (!modulePromise) {
     // SINGLE_FILE=1로 빌드된 ES 모듈. wasm 바이트가 base64로 인라인돼 있어 별도
@@ -68,7 +72,15 @@ async function getModule(): Promise<EmscriptenModule> {
     // (tsdown.config.js의 deps.neverBundle).
     // @ts-expect-error - 빌드가 emit, 타입 없음
     const factory = (await import("../wasm/gif2webp.mjs")).default;
-    modulePromise = factory() as Promise<EmscriptenModule>;
+    modulePromise = factory({
+      // CLI는 성공 시 "Saved output file..."을 stdout에 찍는다. 라이브러리가
+      // 소비자 콘솔을 오염시키지 않도록 stdout은 버리고, stderr는 캡처해 실패
+      // 시 에러로 surface.
+      print: () => {},
+      printErr: (line: string) => {
+        stderrLines.push(line);
+      },
+    }) as Promise<EmscriptenModule>;
   }
   return modulePromise;
 }
@@ -97,6 +109,7 @@ export async function gif2webp(
   await prev.catch(() => {});
   try {
     const mod = await getModule();
+    stderrLines.length = 0; // 이번 호출분만 캡처
     mod.FS.writeFile(INPUT, input);
     try {
       mod.callMain(toArgs(options));
@@ -107,7 +120,16 @@ export async function gif2webp(
         throw err;
       }
     }
-    const out = mod.FS.readFile(OUTPUT);
+    let out: Uint8Array;
+    try {
+      out = mod.FS.readFile(OUTPUT);
+    } catch {
+      // 출력이 없으면 변환 실패. CLI가 stderr에 남긴 이유를 붙여 던진다.
+      const detail = stderrLines.join("\n").trim();
+      throw new Error(
+        `gif2webp 변환 실패: 출력 파일이 생성되지 않음${detail ? `\n${detail}` : ""}`,
+      );
+    }
     // 다음 변환에 모듈을 재사용할 수 있도록 정리.
     try { mod.FS.unlink(INPUT); } catch { /* 무시 */ }
     try { mod.FS.unlink(OUTPUT); } catch { /* 무시 */ }

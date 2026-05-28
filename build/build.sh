@@ -62,6 +62,11 @@ cp COPYING "$OUT/libwebp-LICENSE.txt" 2>/dev/null || true
 # pthread는 의도적으로 비활성 (-DWEBP_USE_THREAD=OFF). gif2webp는 짧은 단일
 #   변환이라 멀티스레드 이득보다 배포 비용(COOP/COEP, SharedArrayBuffer, Worker
 #   파일 별도 호스팅)이 훨씬 큼.
+# ENVIRONMENT=web,worker (node 제외): node를 넣으면 glue에 import("module")이
+#   박혀 소비자 Vite 빌드에서 "Module externalized" 경고가 나고 optimizeDeps.exclude
+#   를 강요받음. 브라우저 전용 라이브러리라 node 제거. worker는 남겨 소비자가
+#   Web Worker 안에서 변환을 돌릴 수 있게 함. (트레이드오프: Node 스모크 불가 →
+#   수동 QA는 examples/playground로)
 EM_LINK="-O3 \
   -sMODULARIZE=1 \
   -sEXPORT_ES6=1 \
@@ -72,7 +77,7 @@ EM_LINK="-O3 \
   -sALLOW_MEMORY_GROWTH=1 \
   -sFORCE_FILESYSTEM=1 \
   -sSINGLE_FILE=1 \
-  -sENVIRONMENT=web,worker,node"
+  -sENVIRONMENT=web,worker"
 
 emcmake cmake -B build -S . \
   -DCMAKE_BUILD_TYPE=Release \
