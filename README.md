@@ -11,7 +11,7 @@ WebP를 네이티브 디코딩하므로, `cwebp`/`dwebp`는 **일부러** 빌드
 | 패키지 | 상태 | 하는 일 |
 |--------|------|---------|
 | [`@btheegg-kimth/gif2webp`](https://www.npmjs.com/package/@btheegg-kimth/gif2webp) ([src](packages/gif2webp)) | [![npm](https://img.shields.io/npm/v/@btheegg-kimth/gif2webp.svg)](https://www.npmjs.com/package/@btheegg-kimth/gif2webp) | 애니메이션 GIF → 애니메이션 WebP |
-| `@btheegg-kimth/img2webp` ([src](packages/img2webp)) | 빌드 완료 · 배포 대기 | 프레임들(PNG/JPEG/WebP) → 애니메이션 WebP |
+| [`@btheegg-kimth/img2webp`](https://www.npmjs.com/package/@btheegg-kimth/img2webp) ([src](packages/img2webp)) | [![npm](https://img.shields.io/npm/v/@btheegg-kimth/img2webp.svg)](https://www.npmjs.com/package/@btheegg-kimth/img2webp) | 프레임들(PNG/JPEG/WebP) → 애니메이션 WebP |
 | `@btheegg-kimth/webpmux`  | 예정 | WebP 컨테이너 / 메타데이터 편집 |
 
 모든 도구는 하나의 libwebp 코어와 하나의 빌드 파이프라인을 공유하므로 다음 도구
@@ -35,7 +35,7 @@ webp-tools/
     │   ├── src/index.ts            # 타입 래퍼
     │   ├── wasm/                   # 커밋되는 빌드 산출물 (배포 대상물)
     │   └── licenses/               # 업스트림 라이선스 전문 (빌드가 채움)
-    └── img2webp/                   # 동일 구조 (wasm/ 빌드 완료, 배포 대기)
+    └── img2webp/                   # 동일 구조 (배포 완료)
 ```
 
 ## WASM 빌드 (메인테이너 전용 — Docker 필요)

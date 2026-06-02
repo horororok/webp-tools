@@ -106,7 +106,7 @@ WASM ES 모듈로 링크. 래퍼는 가상 FS로 구동: `input.gif` 쓰기 → 
 - ✅ 0.0.1 → 0.0.2 (pthread 제거 + SINGLE_FILE) → 0.0.3 (node 제외) publish됨
 - 📌 검증은 수동 QA (`pnpm qa`) — Node 자동 스모크는 ENVIRONMENT=web,worker라 불가
 
-**img2webp** (코드 + wasm 빌드 완료, 배포 대기 — 우선순위 2번째 도구, 결정 #1):
+**img2webp** (publish 완료 — 우선순위 2번째 도구, 결정 #1):
 - ✅ 빌드 trio + 코덱(zlib/libpng/libjpeg-turbo) 소스 빌드 스크립트 작성
 - ✅ 멀티프레임 타입 래퍼 작성 (`img2webp(frames[], opts)`; per-frame duration/q/m)
 - ✅ versions.env 코덱 핀, playground img2webp QA 섹션(canvas PNG 3장 생성→변환) 추가
@@ -114,7 +114,9 @@ WASM ES 모듈로 링크. 래퍼는 가상 FS로 구동: `input.gif` 쓰기 → 
   `packages/img2webp/wasm/img2webp.mjs` 생성 + SHA를 `build/versions.lock`에 기록
   (`img2webp.mjs = dd2359…`, 실제 파일과 일치 확인).
 - ✅ **브라우저 QA 완료** — `pnpm qa` → playground "img2webp" 섹션에서 PNG 3장 →
-  애니메이션 WebP 변환 실측 확인 (PNG 디코드 경로 검증 통과). 남은 건 publish뿐.
+  애니메이션 WebP 변환 실측 확인 (PNG 디코드 경로 검증 통과).
+- ✅ **0.0.1 publish됨** — https://www.npmjs.com/package/@btheegg-kimth/img2webp
+  (repository.url은 `git+https://…` 정규화 형식으로 맞춰 publish 경고 제거).
 - 📌 빌드 리스크(통과 확인됨, 재빌드 시 재확인): libwebp CMake가 우리 prefix에서
   PNG/JPEG를 `find_package`로 찾아야 디코드가 켜짐. 재빌드 시 로그에서 PNG/JPEG
   "found/YES" 확인. 실패 시 WebP/PNM만 읽힘 → `-DPNG_LIBRARY` 등 점검하며 iterate.
@@ -127,11 +129,11 @@ gif2webp 배포 트랙:
 3. **사람:** `npm login` (대화형 2FA)
 4. **사람:** `cd packages/gif2webp && npm publish`
 
-img2webp 트랙 (빌드 + 브라우저 검증 완료, 배포만 남음):
+img2webp 트랙 (✅ 전부 완료 — 0.0.1 publish됨):
 1. ✅ ~~`pnpm build:wasm:img2webp` → `img2webp.mjs` 생성~~ — 완료.
 2. ✅ ~~생성된 SHA를 `build/versions.lock`에 기록~~ — 완료 (`img2webp.mjs = dd2359…`).
 3. ✅ ~~`pnpm qa` → playground에서 PNG 3장 → 애니메이션 WebP 변환 확인~~ — 완료.
-4. **사람:** `cd packages/img2webp && npm publish` (0.0.1).
+4. ✅ ~~`cd packages/img2webp && npm publish` (0.0.1)~~ — 완료.
 
 기술적으론 배포 준비 완료. 패키지에 들어가는 파일:
 - `dist/index.mjs` + `index.d.mts` + sourcemaps (tsdown 산출물)
