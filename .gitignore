@@ -29,4 +29,4 @@ build/.cache/
 # 따라서 ignore 하지 않는다.
 
 # 문서
-docs/*
+docs/secrets/*
