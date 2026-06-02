@@ -10,6 +10,7 @@
   },
   "scripts": {
     "build:wasm": "bash build/build-docker.sh",
+    "build:wasm:img2webp": "bash build/build-docker-img2webp.sh",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "qa": "pnpm -r build && pnpm --filter playground dev"

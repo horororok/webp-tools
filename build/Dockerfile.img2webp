@@ -1,0 +1,39 @@
+# webp-tools 모노레포의 재현 가능 WASM 빌드 — img2webp.
+#
+# 본인(메인테이너)이 .wasm을 재빌드할 때'만' 실행됨 — 설치 시점도, 브라우저에서도
+# 절대 안 돎. 소비자는 그냥 `pnpm add @btheegg-kimth/img2webp`로 prebuilt 산출물을
+# 받는다. Docker는 순전히 "오늘의 나, 내년의 나, CI"가 동일한 .wasm을 뽑기 위함.
+#
+# build/build-docker-img2webp.sh 로 빌드 + 산출물 추출 (BuildKit --output 사용).
+#
+# gif2webp와 별개 Dockerfile인 이유: 입력 디코더(zlib/libpng/libjpeg-turbo)를
+# 추가로 소스 빌드하므로 build args / 빌드 스크립트가 다르다. 공유되는 건 emsdk
+# 베이스 이미지와 빌드 철학(소스 빌드 + 핀 + scratch export)뿐.
+
+ARG EMSDK_VERSION=3.1.74
+# 의도적으로 amd64 고정 (gif2webp Dockerfile과 동일 근거 — 산출물은 아키텍처 독립적).
+ARG BUILD_PLATFORM=linux/amd64
+FROM --platform=${BUILD_PLATFORM} emscripten/emsdk:${EMSDK_VERSION} AS builder
+
+ARG LIBWEBP_VERSION=1.6.0
+ARG ZLIB_VERSION=1.3.1
+ARG LIBPNG_VERSION=1.6.44
+ARG LIBJPEGTURBO_VERSION=3.0.4
+ENV LIBWEBP_VERSION=${LIBWEBP_VERSION} \
+    ZLIB_VERSION=${ZLIB_VERSION} \
+    LIBPNG_VERSION=${LIBPNG_VERSION} \
+    LIBJPEGTURBO_VERSION=${LIBJPEGTURBO_VERSION}
+
+# emsdk 이미지엔 cmake/make/python이 이미 들어있고, curl만 추가한다.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /work
+COPY build-img2webp.sh /work/build-img2webp.sh
+RUN chmod +x /work/build-img2webp.sh && /work/build-img2webp.sh
+
+# 추출 전용 스테이지: 산출물 외엔 아무것도 없어서
+# `docker build --output type=local`이 호스트에 깔끔한 폴더를 떨군다.
+FROM scratch AS export
+COPY --from=builder /out/ /

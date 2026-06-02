@@ -9,7 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@btheegg-kimth/gif2webp": "workspace:*"
+    "@btheegg-kimth/gif2webp": "workspace:*",
+    "@btheegg-kimth/img2webp": "workspace:*"
   },
   "devDependencies": {
     "vite": "^8.0.14"
