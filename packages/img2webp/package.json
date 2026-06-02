@@ -6,7 +6,7 @@
   "author": "btheegg-kimth",
   "repository": {
     "type": "git",
-    "url": "https://github.com/horororok/webp-tools.git",
+    "url": "git+https://github.com/horororok/webp-tools.git",
     "directory": "packages/img2webp"
   },
   "homepage": "https://github.com/horororok/webp-tools/tree/main/packages/img2webp",
