@@ -11,7 +11,7 @@ WebP를 네이티브 디코딩하므로, `cwebp`/`dwebp`는 **일부러** 빌드
 | 패키지 | 상태 | 하는 일 |
 |--------|------|---------|
 | [`@btheegg-kimth/gif2webp`](https://www.npmjs.com/package/@btheegg-kimth/gif2webp) ([src](packages/gif2webp)) | [![npm](https://img.shields.io/npm/v/@btheegg-kimth/gif2webp.svg)](https://www.npmjs.com/package/@btheegg-kimth/gif2webp) | 애니메이션 GIF → 애니메이션 WebP |
-| `@btheegg-kimth/img2webp` | 예정 | 프레임들 → 애니메이션 WebP |
+| `@btheegg-kimth/img2webp` ([src](packages/img2webp)) | 빌드 완료 · 배포 대기 | 프레임들(PNG/JPEG/WebP) → 애니메이션 WebP |
 | `@btheegg-kimth/webpmux`  | 예정 | WebP 컨테이너 / 메타데이터 편집 |
 
 모든 도구는 하나의 libwebp 코어와 하나의 빌드 파이프라인을 공유하므로 다음 도구
@@ -21,26 +21,34 @@ WebP를 네이티브 디코딩하므로, `cwebp`/`dwebp`는 **일부러** 빌드
 
 ```
 webp-tools/
-├── build/                  # 공유 재현 가능 WASM 빌드 파이프라인
-│   ├── Dockerfile          # emscripten 환경 + scratch export 스테이지
-│   ├── build.sh            # giflib + libwebp + gif2webp -> wasm (컨테이너 안에서)
-│   ├── build-docker.sh     # 호스트 오케스트레이터 (docker build + 추출)
-│   └── versions.env        # 핀 박은 emsdk / libwebp / giflib 버전
+├── build/                          # 공유 재현 가능 WASM 빌드 파이프라인
+│   ├── Dockerfile                  # gif2webp: emscripten + scratch export 스테이지
+│   ├── build.sh                    # giflib + libwebp + gif2webp -> wasm
+│   ├── build-docker.sh             # 호스트 오케스트레이터 (gif2webp)
+│   ├── Dockerfile.img2webp         # img2webp: 코덱 소스 빌드 추가
+│   ├── build-img2webp.sh           # zlib+libpng+libjpeg-turbo + libwebp + img2webp -> wasm
+│   ├── build-docker-img2webp.sh    # 호스트 오케스트레이터 (img2webp)
+│   ├── versions.env                # 핀 박은 emsdk / libwebp / giflib / 코덱 버전
+│   └── versions.lock               # 산출물 SHA-256
 └── packages/
-    └── gif2webp/
-        ├── src/index.ts    # 타입 래퍼
-        ├── wasm/           # 커밋되는 빌드 산출물 (배포 대상물)
-        └── licenses/       # 업스트림 라이선스 전문 (빌드가 채움)
+    ├── gif2webp/
+    │   ├── src/index.ts            # 타입 래퍼
+    │   ├── wasm/                   # 커밋되는 빌드 산출물 (배포 대상물)
+    │   └── licenses/               # 업스트림 라이선스 전문 (빌드가 채움)
+    └── img2webp/                   # 동일 구조 (wasm/ 빌드 완료, 배포 대기)
 ```
 
 ## WASM 빌드 (메인테이너 전용 — Docker 필요)
 
 ```sh
 pnpm install
-pnpm build:wasm        # Docker로 빌드, 산출물을 packages/gif2webp/wasm/에 떨굼
+pnpm build:wasm            # gif2webp -> packages/gif2webp/wasm/
+pnpm build:wasm:img2webp   # img2webp -> packages/img2webp/wasm/
 ```
 
 Docker는 **오직** 여기서, 재빌드할 때만 돕니다. 소비자는 절대 실행하지 않습니다.
+도구마다 빌드 trio(Dockerfile + 컨테이너 스크립트 + 호스트 스크립트)가 분리돼
+있어 한 도구 빌드가 다른 도구에 영향을 주지 않습니다.
 
 ## 패키지 빌드
 
@@ -70,12 +78,3 @@ npm publish            # publishConfig.access=public 가 스코프드 기본 pri
 
 `build/versions.env` 수정 → `pnpm build:wasm` 재실행 → 새 wasm SHA-256 기록 →
 패키지 버전 올림(semver) → 재배포.
-
-## 가이드 문서
-
-- [`docs/01-create-npm-library.md`](docs/01-create-npm-library.md) — 첫 패키지를 처음부터
-  npm public 배포까지 (이 레포가 거친 풀스택 과정)
-- [`docs/02-add-package-to-org.md`](docs/02-add-package-to-org.md) — 같은 org에 새 패키지
-  추가하는 빠른 워크플로 (img2webp, webpmux 등)
-- [`docs/03-update-and-republish.md`](docs/03-update-and-republish.md) — 이미 publish된
-  패키지의 새 버전 배포 (반복 워크플로, WASM 재빌드 포함)

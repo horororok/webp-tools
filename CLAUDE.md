@@ -52,15 +52,29 @@ libwebp 코어 + 하나의 빌드 파이프라인을 공유합니다. 목표는 
 
 ```
 build/
-  Dockerfile        # emscripten 환경 + scratch 'export' 스테이지
-  build.sh          # giflib + libwebp + gif2webp -> wasm (컨테이너 안에서 실행)
-  build-docker.sh   # 호스트: docker build --output -> packages/gif2webp/wasm/
-  versions.env      # 핀 박은 버전들
+  Dockerfile                 # gif2webp: emscripten 환경 + scratch 'export' 스테이지
+  build.sh                   # giflib + libwebp + gif2webp -> wasm
+  build-docker.sh            # 호스트: docker build --output -> packages/gif2webp/wasm/
+  Dockerfile.img2webp        # img2webp: 입력 디코더(zlib/png/jpeg) 소스 빌드 추가
+  build-img2webp.sh          # zlib+libpng+libjpeg-turbo + libwebp + img2webp -> wasm
+  build-docker-img2webp.sh   # 호스트: docker build --output -> packages/img2webp/wasm/
+  versions.env               # 핀 박은 버전들 (emsdk/libwebp/giflib + 코덱 3종)
+  versions.lock              # 산출물 SHA-256
 packages/gif2webp/
   src/index.ts      # 타입 래퍼: gif2webp(Uint8Array, opts) -> Uint8Array
   wasm/             # 커밋되는 빌드 산출물 (gif2webp.mjs — wasm 인라인됨)
   licenses/         # 업스트림 라이선스 전문 (빌드가 채움)
+packages/img2webp/
+  src/index.ts      # 타입 래퍼: img2webp(frames[], opts) -> Uint8Array (멀티프레임)
+  wasm/             # 빌드 완료, 커밋됨 (img2webp.mjs — SHA는 versions.lock)
+  licenses/         # libwebp/libpng/zlib/libjpeg-turbo 전문 (빌드가 채움)
 ```
+
+도구마다 빌드 trio가 분리돼 있다(공유 emsdk 베이스 + 동일 철학, 스크립트는 병렬).
+gif2webp는 giflib만 필요하지만 img2webp는 PNG/JPEG 프레임을 읽어야 해서
+zlib+libpng+libjpeg-turbo를 소스로 추가 빌드한 뒤 libwebp `find_package(ZLIB/PNG/
+JPEG)`에 물린다. 에뮤스크립튼 ports를 쓰지 않는 건 코덱 버전이 emsdk에 묶여
+versions.env 핀이 깨지기 때문(결정 #2/#5).
 
 빌드 흐름: giflib → `libgif.a` (emcc/emar); libwebp는 `emcmake cmake`로
 `WEBP_BUILD_GIF2WEBP=ON` + `WEBP_USE_THREAD=OFF`(pthread 비활성); gif2webp를
@@ -81,8 +95,9 @@ WASM ES 모듈로 링크. 래퍼는 가상 FS로 구동: `input.gif` 쓰기 → 
   안에서 변환 가능. 트레이드오프: Node 실행 불가 → 자동 스모크 대신 수동 QA
   (`examples/playground`, `pnpm qa`).
 
-## 현재 상태 (2026-05-27)
+## 현재 상태 (2026-06-02)
 
+**gif2webp** (publish 완료):
 - ✅ 스캐폴드 + 빌드 파이프라인 + 래퍼 작성 완료
 - ✅ wasm 빌드 검증됨 (SHA: `build/versions.lock` 참조)
 - ✅ 래퍼 wasm 로딩 확정 (emit된 glue 모양과 매칭)
@@ -91,13 +106,32 @@ WASM ES 모듈로 링크. 래퍼는 가상 FS로 구동: `input.gif` 쓰기 → 
 - ✅ 0.0.1 → 0.0.2 (pthread 제거 + SINGLE_FILE) → 0.0.3 (node 제외) publish됨
 - 📌 검증은 수동 QA (`pnpm qa`) — Node 자동 스모크는 ENVIRONMENT=web,worker라 불가
 
+**img2webp** (코드 + wasm 빌드 완료, 배포 대기 — 우선순위 2번째 도구, 결정 #1):
+- ✅ 빌드 trio + 코덱(zlib/libpng/libjpeg-turbo) 소스 빌드 스크립트 작성
+- ✅ 멀티프레임 타입 래퍼 작성 (`img2webp(frames[], opts)`; per-frame duration/q/m)
+- ✅ versions.env 코덱 핀, playground img2webp QA 섹션(canvas PNG 3장 생성→변환) 추가
+- ✅ **wasm 빌드 완료** — `pnpm build:wasm:img2webp`(Docker) 실행됨.
+  `packages/img2webp/wasm/img2webp.mjs` 생성 + SHA를 `build/versions.lock`에 기록
+  (`img2webp.mjs = dd2359…`, 실제 파일과 일치 확인).
+- ✅ **브라우저 QA 완료** — `pnpm qa` → playground "img2webp" 섹션에서 PNG 3장 →
+  애니메이션 WebP 변환 실측 확인 (PNG 디코드 경로 검증 통과). 남은 건 publish뿐.
+- 📌 빌드 리스크(통과 확인됨, 재빌드 시 재확인): libwebp CMake가 우리 prefix에서
+  PNG/JPEG를 `find_package`로 찾아야 디코드가 켜짐. 재빌드 시 로그에서 PNG/JPEG
+  "found/YES" 확인. 실패 시 WebP/PNM만 읽힘 → `-DPNG_LIBRARY` 등 점검하며 iterate.
+
 ## 바로 다음 작업
 
+gif2webp 배포 트랙:
 1. **사람:** GitHub repo `webp-tools` 생성 + 첫 푸시
 2. **사람:** npmjs.com에서 무료 org `btheegg-kimth` 생성 + 2FA 활성화
 3. **사람:** `npm login` (대화형 2FA)
 4. **사람:** `cd packages/gif2webp && npm publish`
-5. 그 후 — 실 사용 피드백 들어오면 img2webp/webpmux 검토 (결정 #1, #3)
+
+img2webp 트랙 (빌드 + 브라우저 검증 완료, 배포만 남음):
+1. ✅ ~~`pnpm build:wasm:img2webp` → `img2webp.mjs` 생성~~ — 완료.
+2. ✅ ~~생성된 SHA를 `build/versions.lock`에 기록~~ — 완료 (`img2webp.mjs = dd2359…`).
+3. ✅ ~~`pnpm qa` → playground에서 PNG 3장 → 애니메이션 WebP 변환 확인~~ — 완료.
+4. **사람:** `cd packages/img2webp && npm publish` (0.0.1).
 
 기술적으론 배포 준비 완료. 패키지에 들어가는 파일:
 - `dist/index.mjs` + `index.d.mts` + sourcemaps (tsdown 산출물)
