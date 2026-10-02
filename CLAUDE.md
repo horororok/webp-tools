@@ -109,7 +109,7 @@ WASM ES 모듈로 링크. 래퍼는 가상 FS로 구동: `input.gif` 쓰기 → 
 - ✅ 래퍼 wasm 로딩 확정 (emit된 glue 모양과 매칭)
 - ✅ 브라우저 실측 검증 (`pnpm qa` → playground에서 실 GIF 변환 확인)
 - ✅ TS 6.0 + tsdown 빌드 파이프라인 확정
-- ✅ 0.0.1 → 0.0.2 (pthread 제거 + SINGLE_FILE) → 0.0.3 (node 제외) → 0.0.4 (리사이즈) publish됨 → 0.0.5 (lossless/loopCount 버그 수정) publish됨
+- ✅ 0.0.1 → 0.0.2 (pthread 제거 + SINGLE_FILE) → 0.0.3 (node 제외) → 0.0.4 (리사이즈) publish됨 → 0.0.5 (lossless/loopCount 버그 수정) → 0.0.6 (워커 API + 스택 누수 수정) publish됨
 - 📌 검증은 수동 QA (`pnpm qa`) — Node 자동 스모크는 ENVIRONMENT=web,worker라 불가
 - ✅ **0.0.4: 리사이즈 옵션 publish됨** — `resize?: { width, height, fit, withoutEnlargement }`.
   업스트림에 없어서 `build/patches/gif2webp.patch`로 `-resize <w> <h>`,
@@ -129,7 +129,7 @@ WASM ES 모듈로 링크. 래퍼는 가상 FS로 구동: `input.gif` 쓰기 → 
   추가(WebP 기준 0 = 무한). 패치 이름은 `gif2webp.patch`로 변경. wasm 재빌드
   (`9a0d5d…`) + headless Chrome QA 완료(0.0.4 옵션 결과는 바이트 단위로 동일).
   publish된 tarball의 wasm SHA가 versions.lock과 일치함을 확인.
-- 🚧 **0.0.6: 워커 API** — `import { gif2webp } from "@btheegg-kimth/gif2webp/worker"`.
+- ✅ **0.0.6: 워커 API publish됨** — `import { gif2webp } from "@btheegg-kimth/gif2webp/worker"`.
   메인 스레드용과 시그니처가 같고, 첫 호출 때 패키지 안에서
   `new Worker(new URL("./worker-entry.mjs", import.meta.url), { type: "module" })`로
   워커를 만든다. wasm은 그대로(재빌드 없음). 입력은 기본 복사(5 MB에 1 ms 미만),
@@ -158,7 +158,8 @@ WASM ES 모듈로 링크. 래퍼는 가상 FS로 구동: `input.gif` 쓰기 → 
     워커로 인식하지 못함).
   검증: Vite 5/6/7/8 build·dev(41개 항목), webpack 5, tsc bundler/node16/node10, publint,
   attw, Node import. 회귀 스위트는 600회 연속 변환과 전역 상태 누수 재현을 포함.
-  남은 작업: publish. img2webp도 같은 callMain 스택 누수가 있음(별도 수정 필요).
+  publish된 tarball이 테스트한 로컬 빌드와 파일 단위로 같음을 확인.
+  🚧 img2webp도 같은 callMain 스택 누수가 있음(별도 수정 필요, 아래 img2webp 참고).
 
 **img2webp** (publish 완료 — 우선순위 2번째 도구, 결정 #1):
 - ✅ 빌드 trio + 코덱(zlib/libpng/libjpeg-turbo) 소스 빌드 스크립트 작성
@@ -171,6 +172,10 @@ WASM ES 모듈로 링크. 래퍼는 가상 FS로 구동: `input.gif` 쓰기 → 
   애니메이션 WebP 변환 실측 확인 (PNG 디코드 경로 검증 통과).
 - ✅ **0.0.1 publish됨** — https://www.npmjs.com/package/@btheegg-kimth/img2webp
   (repository.url은 `git+https://…` 정규화 형식으로 맞춰 publish 경고 제거).
+- 🐛 **알려진 버그 (미수정):** gif2webp 0.0.6에서 고친 것과 같은 callMain 스택 누수.
+  같은 모듈로 수백 번 호출하면 크래시 후 무한 대기(인자가 많아 gif2webp보다 일찍 터질 수
+  있음). 수정 방법은 gif2webp와 같음: build-img2webp.sh의 EXPORTED_RUNTIME_METHODS에
+  stackSave,stackRestore 추가 → 재빌드 → 래퍼에서 호출마다 복원.
 - 📌 빌드 리스크(통과 확인됨, 재빌드 시 재확인): libwebp CMake가 우리 prefix에서
   PNG/JPEG를 `find_package`로 찾아야 디코드가 켜짐. 재빌드 시 로그에서 PNG/JPEG
   "found/YES" 확인. 실패 시 WebP/PNM만 읽힘 → `-DPNG_LIBRARY` 등 점검하며 iterate.
