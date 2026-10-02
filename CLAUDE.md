@@ -159,7 +159,7 @@ WASM ES 모듈로 링크. 래퍼는 가상 FS로 구동: `input.gif` 쓰기 → 
   검증: Vite 5/6/7/8 build·dev(41개 항목), webpack 5, tsc bundler/node16/node10, publint,
   attw, Node import. 회귀 스위트는 600회 연속 변환과 전역 상태 누수 재현을 포함.
   publish된 tarball이 테스트한 로컬 빌드와 파일 단위로 같음을 확인.
-  🚧 img2webp도 같은 callMain 스택 누수가 있음(별도 수정 필요, 아래 img2webp 참고).
+  img2webp의 같은 스택 누수는 img2webp 0.0.2에서 수정(아래).
 
 **img2webp** (publish 완료 — 우선순위 2번째 도구, 결정 #1):
 - ✅ 빌드 trio + 코덱(zlib/libpng/libjpeg-turbo) 소스 빌드 스크립트 작성
@@ -172,10 +172,16 @@ WASM ES 모듈로 링크. 래퍼는 가상 FS로 구동: `input.gif` 쓰기 → 
   애니메이션 WebP 변환 실측 확인 (PNG 디코드 경로 검증 통과).
 - ✅ **0.0.1 publish됨** — https://www.npmjs.com/package/@btheegg-kimth/img2webp
   (repository.url은 `git+https://…` 정규화 형식으로 맞춰 publish 경고 제거).
-- 🐛 **알려진 버그 (미수정):** gif2webp 0.0.6에서 고친 것과 같은 callMain 스택 누수.
-  같은 모듈로 수백 번 호출하면 크래시 후 무한 대기(인자가 많아 gif2webp보다 일찍 터질 수
-  있음). 수정 방법은 gif2webp와 같음: build-img2webp.sh의 EXPORTED_RUNTIME_METHODS에
-  stackSave,stackRestore 추가 → 재빌드 → 래퍼에서 호출마다 복원.
+- 🚧 **0.0.2: callMain 스택 누수 수정** (gif2webp 0.0.6과 같은 버그). 0.0.1은 프레임 4장
+  기준 107번째 호출에서 크래시. stackSave/stackRestore를 export(재빌드, `249d68…`)하고
+  래퍼가 호출마다 복원 + 크래시 시 모듈 재생성 + 초기화 실패 캐시 안 함. img2webp.c에는
+  호출 사이에 남는 전역 상태 없음(확인함). 인코딩 결과는 0.0.1과 바이트 단위로 같음.
+  검증: npm pack tarball로 Vite 5/6/7/8 build·dev 15개 항목(1500회 연속 변환, 0.0.1
+  결과와 바이트 비교 6케이스, 에러 후 상태 오염 없음, lazy), webpack 5, tsc 3가지 해석,
+  publint, attw, Node import.
+  빌드도 수정: zlib 1.3.1 CMake가 shared/static 타깃을 둘 다 만들고 emscripten에선 둘 다
+  같은 libz.a로 출력돼, 병렬 빌드에서 간헐적으로 실패(ranlib: unable to load 'libz.a')
+  했다. zlibstatic만 빌드하고 직접 설치 → no-cache 빌드 2회 모두 같은 SHA. 남은 작업: publish.
 - 📌 빌드 리스크(통과 확인됨, 재빌드 시 재확인): libwebp CMake가 우리 prefix에서
   PNG/JPEG를 `find_package`로 찾아야 디코드가 켜짐. 재빌드 시 로그에서 PNG/JPEG
   "found/YES" 확인. 실패 시 WebP/PNM만 읽힘 → `-DPNG_LIBRARY` 등 점검하며 iterate.

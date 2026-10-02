@@ -10,7 +10,7 @@ WebP를 네이티브 디코딩하므로, `cwebp`/`dwebp`는 **일부러** 빌드
 
 | 패키지 | 상태 | 하는 일 |
 |--------|------|---------|
-| [`@btheegg-kimth/gif2webp`](https://www.npmjs.com/package/@btheegg-kimth/gif2webp) ([src](packages/gif2webp)) | [![npm](https://img.shields.io/npm/v/@btheegg-kimth/gif2webp.svg)](https://www.npmjs.com/package/@btheegg-kimth/gif2webp) | 애니메이션 GIF → 애니메이션 WebP |
+| [`@btheegg-kimth/gif2webp`](https://www.npmjs.com/package/@btheegg-kimth/gif2webp) ([src](packages/gif2webp)) | [![npm](https://img.shields.io/npm/v/@btheegg-kimth/gif2webp.svg)](https://www.npmjs.com/package/@btheegg-kimth/gif2webp) | 애니메이션 GIF → 애니메이션 WebP (리사이즈, 루프 횟수, Web Worker 변환 지원) |
 | [`@btheegg-kimth/img2webp`](https://www.npmjs.com/package/@btheegg-kimth/img2webp) ([src](packages/img2webp)) | [![npm](https://img.shields.io/npm/v/@btheegg-kimth/img2webp.svg)](https://www.npmjs.com/package/@btheegg-kimth/img2webp) | 프레임들(PNG/JPEG/WebP) → 애니메이션 WebP |
 | `@btheegg-kimth/webpmux`  | 예정 | WebP 컨테이너 / 메타데이터 편집 |
 
@@ -23,7 +23,8 @@ WebP를 네이티브 디코딩하므로, `cwebp`/`dwebp`는 **일부러** 빌드
 webp-tools/
 ├── build/                          # 공유 재현 가능 WASM 빌드 파이프라인
 │   ├── Dockerfile                  # gif2webp: emscripten + scratch export 스테이지
-│   ├── build.sh                    # giflib + libwebp + gif2webp -> wasm
+│   ├── build.sh                    # giflib + libwebp + gif2webp -> wasm (patches/ 적용)
+│   ├── patches/gif2webp.patch      # gif2webp.c 패치 (리사이즈, 루프 횟수, 전역 상태 초기화)
 │   ├── build-docker.sh             # 호스트 오케스트레이터 (gif2webp)
 │   ├── Dockerfile.img2webp         # img2webp: 코덱 소스 빌드 추가
 │   ├── build-img2webp.sh           # zlib+libpng+libjpeg-turbo + libwebp + img2webp -> wasm
@@ -32,7 +33,10 @@ webp-tools/
 │   └── versions.lock               # 산출물 SHA-256
 └── packages/
     ├── gif2webp/
-    │   ├── src/index.ts            # 타입 래퍼
+    │   ├── src/index.ts            # 타입 래퍼 (메인 스레드)
+    │   ├── src/worker.ts           # `/worker`: 같은 API를 Web Worker에서 실행
+    │   ├── src/core.ts             # 변환 런타임 (메인/워커 공유)
+    │   ├── docs/                   # README 예시 이미지 (npm에는 미포함)
     │   ├── wasm/                   # 커밋되는 빌드 산출물 (배포 대상물)
     │   └── licenses/               # 업스트림 라이선스 전문 (빌드가 채움)
     └── img2webp/                   # 동일 구조 (배포 완료)
@@ -53,7 +57,7 @@ Docker는 **오직** 여기서, 재빌드할 때만 돕니다. 소비자는 절�
 ## 패키지 빌드
 
 ```sh
-pnpm -r build          # tsdown: src/index.ts -> dist/index.mjs + .d.mts
+pnpm -r build          # tsdown: src/*.ts -> dist/*.mjs + .d.mts
 ```
 
 ## 수동 QA (브라우저 실측)
@@ -64,6 +68,10 @@ pnpm qa                # dist 빌드 후 examples/playground Vite dev 서버 실
 
 브라우저에서 열고 GIF를 변환해 동작 확인. 라이브러리가 `ENVIRONMENT=web,worker`로
 빌드돼 Node 실행이 안 되므로(브라우저 전용), 검증은 실제 브라우저에서 한다.
+
+playground는 workspace 링크라 소비자 환경과 다르다(Vite의 의존성 사전 번들링을 안 거침).
+워커, `sideEffects`, 번들러 설정에 걸린 변경은 `npm pack`으로 만든 tarball을 별도
+Vite 프로젝트에 설치해 dev와 build를 둘 다 확인한다.
 
 ## 배포 (최초)
 

@@ -1,6 +1,6 @@
 {
   "name": "@btheegg-kimth/img2webp",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Frames (PNG/JPEG/WebP) -> animated WebP in the browser, via libwebp img2webp compiled to WASM.",
   "license": "MIT",
   "author": "btheegg-kimth",

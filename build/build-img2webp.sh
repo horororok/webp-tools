@@ -48,8 +48,14 @@ emcmake cmake -B build -S . \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX="$DEPS" \
   -DBUILD_SHARED_LIBS=OFF
-emmake cmake --build build -j"$NPROC"
-emmake cmake --install build
+# zlib 1.3.1 CMake는 BUILD_SHARED_LIBS와 무관하게 shared(zlib)·static(zlibstatic)
+# 타깃을 둘 다 만들고, emscripten에선 둘 다 같은 libz.a로 출력된다. 병렬 빌드에서
+# 같은 파일을 동시에 써 간헐적으로 실패하고(ranlib: unable to load 'libz.a'), 성공해도
+# 어느 쪽이 남을지 실행마다 달라 재현성이 깨진다. static 타깃만 빌드하고 직접 설치한다.
+emmake cmake --build build --target zlibstatic -j"$NPROC"
+mkdir -p "$DEPS/include" "$DEPS/lib"
+cp build/libz.a "$DEPS/lib/"
+cp zlib.h build/zconf.h "$DEPS/include/"
 # 라이선스 전문 (zlib 라이선스). zlib는 README 말미에 라이선스를 둔다.
 cp README "$OUT/zlib-LICENSE.txt" 2>/dev/null || true
 cd "$SRC"
@@ -120,11 +126,14 @@ cp COPYING "$OUT/libwebp-LICENSE.txt" 2>/dev/null || true
 # 래퍼가 구동: frame0..N 쓰기 -> callMain(args) -> 가상 FS에서 output.webp 읽기.
 #
 # 빌드 옵션 근거는 gif2webp와 동일 (SINGLE_FILE / pthread off / node 제외).
+# stackSave/stackRestore: callMain은 argv를 wasm 스택에 올리고 되돌리지 않아, 같은
+#   모듈로 반복 호출하면 스택이 바닥나 크래시/무한 대기가 된다(프레임 4장 기준 107번째
+#   호출). 래퍼가 호출마다 스택 포인터를 복원한다.
 EM_LINK="-O3 \
   -sMODULARIZE=1 \
   -sEXPORT_ES6=1 \
   -sEXPORT_NAME=Img2Webp \
-  -sEXPORTED_RUNTIME_METHODS=callMain,FS \
+  -sEXPORTED_RUNTIME_METHODS=callMain,FS,stackSave,stackRestore \
   -sINVOKE_RUN=0 \
   -sEXIT_RUNTIME=0 \
   -sALLOW_MEMORY_GROWTH=1 \

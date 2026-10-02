@@ -101,6 +101,8 @@ function normalizeFrame(f: Uint8Array | Img2WebpFrame): Img2WebpFrame {
 
 type EmscriptenModule = {
   callMain: (args: string[]) => number;
+  stackSave: () => number;
+  stackRestore: (sp: number) => void;
   FS: {
     writeFile: (path: string, data: Uint8Array) => void;
     readFile: (path: string) => Uint8Array;
@@ -114,21 +116,27 @@ let modulePromise: Promise<EmscriptenModule> | null = null;
 // 호출은 mutex로 직렬화되므로 호출 시작 시 비우면 이번 호출분만 캡처됨.
 const stderrLines: string[] = [];
 
-async function getModule(): Promise<EmscriptenModule> {
+function getModule(): Promise<EmscriptenModule> {
   if (!modulePromise) {
     // SINGLE_FILE=1로 빌드된 ES 모듈. wasm 바이트가 base64로 인라인돼 있어 별도
     // .wasm 파일 fetch 없이 자체 완결. tsdown 번들에서 external로 제외함
     // (tsdown.config.js의 deps.neverBundle).
     // @ts-expect-error - 빌드가 emit, 타입 없음
-    const factory = (await import("../wasm/img2webp.mjs")).default;
-    modulePromise = factory({
-      // CLI는 성공 시 진행 메시지를 stdout에 찍는다. 라이브러리가 소비자 콘솔을
-      // 오염시키지 않도록 stdout은 버리고, stderr는 캡처해 실패 시 에러로 surface.
-      print: () => {},
-      printErr: (line: string) => {
-        stderrLines.push(line);
-      },
-    }) as Promise<EmscriptenModule>;
+    const p: Promise<EmscriptenModule> = import("../wasm/img2webp.mjs").then((m) =>
+      m.default({
+        // CLI는 성공 시 진행 메시지를 stdout에 찍는다. 라이브러리가 소비자 콘솔을
+        // 오염시키지 않도록 stdout은 버리고, stderr는 캡처해 실패 시 에러로 surface.
+        print: () => {},
+        printErr: (line: string) => {
+          stderrLines.push(line);
+        },
+      }),
+    );
+    // 초기화 실패를 영구히 캐시하지 않는다(다음 호출 때 다시 시도).
+    p.catch(() => {
+      if (modulePromise === p) modulePromise = null;
+    });
+    modulePromise = p;
   }
   return modulePromise;
 }
@@ -180,13 +188,27 @@ export async function img2webp(
     const mod = await getModule();
     stderrLines.length = 0; // 이번 호출분만 캡처
     normalized.forEach((f, i) => mod.FS.writeFile(frameName(i), f.data));
+    // callMain은 argv를 wasm 스택에 올리고 되돌리지 않는다. 복원하지 않으면 같은
+    // 모듈로 반복 호출했을 때 스택이 바닥나 크래시 후 무한 대기에 빠진다.
+    const sp = mod.stackSave();
     try {
       mod.callMain(args);
     } catch (err: unknown) {
       // EXIT_RUNTIME=0이면 Emscripten은 성공 시에도 ExitStatus를 던진다.
       const status = err as { name?: string; status?: number } | null;
-      if (!(status && status.name === "ExitStatus" && status.status === 0)) {
+      if (!(status && status.name === "ExitStatus")) {
+        // ExitStatus가 아닌 예외(RuntimeError, abort 등)면 wasm 상태를 믿을 수 없다.
+        // 이 모듈을 버리고 다음 호출 때 새로 만든다 (호출은 mutex로 직렬화돼 있음).
+        modulePromise = null;
         throw err;
+      }
+      if (status.status !== 0) throw err;
+    } finally {
+      // 크래시한 모듈에서는 이것도 throw할 수 있다. 원래 에러를 가리지 않도록 무시.
+      try {
+        mod.stackRestore(sp);
+      } catch {
+        /* 무시 */
       }
     }
     let out: Uint8Array;

@@ -12,6 +12,6 @@ gif2webp.mjs = 64046ccf6f17cd88bce1d35f74ca4a02590f1140afc7e0f944015ee7264dbedc
 # wasm은 SINGLE_FILE=1로 mjs에 인라인됨 — 별도 파일 없음.
 
 # 비교:  shasum -a 256 packages/img2webp/wasm/img2webp.mjs
-[img2webp @ emsdk=3.1.74 libwebp=1.6.0 zlib=1.3.1 libpng=1.6.44 libjpeg-turbo=3.0.4 platform=linux/amd64 env=web,worker single_file=1 threads=off]
-img2webp.mjs = dd2359dfe46060481f4d885e9ebecd782aa654a8dd8b9953aeb0c3769c3c384f
+[img2webp @ emsdk=3.1.74 libwebp=1.6.0 zlib=1.3.1 libpng=1.6.44 libjpeg-turbo=3.0.4 platform=linux/amd64 env=web,worker single_file=1 threads=off runtime=callMain,FS,stackSave,stackRestore]
+img2webp.mjs = 249d6892fa608bf5cbb2a0f4183e2935311a2f30c5865642ddd5b37475156c32
 # wasm은 SINGLE_FILE=1로 mjs에 인라인됨 — 별도 파일 없음.

@@ -83,6 +83,11 @@ per-frame 옵션 (`Img2WebpFrame` 또는 `defaultFrame`):
 - **pthread 비활성** 빌드이므로 COOP/COEP 헤더, SharedArrayBuffer 등 추가 요구사
   항 없음 — Vite/Webpack/Next 등 일반 환경에서 그대로 동작.
 - 호출은 내부 mutex로 직렬화 — `Promise.all`로 여러 변환을 동시에 걸어도 안전.
+- **0.0.1을 쓰고 있다면 0.0.2로 올리세요.** 0.0.1은 한 페이지에서 반복 호출하면 wasm
+  스택이 조금씩 새서, 프레임 4장 기준 약 100번째 호출에서 크래시하고 그 뒤로는 멈췄습니다.
+- 변환하는 동안 메인 스레드가 멈춥니다. 직접 만든 Web Worker 안에서 호출해도 됩니다.
+  Vite 7 이하에서 워커 안에서 쓰려면 vite.config에 `worker: { format: "es" }`가
+  필요합니다(기본 형식 iife는 wasm의 지연 로딩에 쓰는 동적 import를 지원하지 않음).
 - libwebp(BSD-3-Clause) + libpng(PNG License) + zlib(Zlib License) +
   libjpeg-turbo(IJG/BSD-3-Clause)로 빌드됨. `THIRD_PARTY_LICENSES.md` 참고.
 - 래퍼 코드는 MIT.
