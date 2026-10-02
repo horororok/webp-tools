@@ -104,7 +104,7 @@ WASM ES 모듈로 링크. 래퍼는 가상 FS로 구동: `input.gif` 쓰기 → 
 - ✅ 래퍼 wasm 로딩 확정 (emit된 glue 모양과 매칭)
 - ✅ 브라우저 실측 검증 (`pnpm qa` → playground에서 실 GIF 변환 확인)
 - ✅ TS 6.0 + tsdown 빌드 파이프라인 확정
-- ✅ 0.0.1 → 0.0.2 (pthread 제거 + SINGLE_FILE) → 0.0.3 (node 제외) → 0.0.4 (리사이즈) publish됨 → 0.0.5 (lossless/loopCount 버그 수정) 준비됨
+- ✅ 0.0.1 → 0.0.2 (pthread 제거 + SINGLE_FILE) → 0.0.3 (node 제외) → 0.0.4 (리사이즈) publish됨 → 0.0.5 (lossless/loopCount 버그 수정) publish됨
 - 📌 검증은 수동 QA (`pnpm qa`) — Node 자동 스모크는 ENVIRONMENT=web,worker라 불가
 - ✅ **0.0.4: 리사이즈 옵션 publish됨** — `resize?: { width, height, fit, withoutEnlargement }`.
   업스트림에 없어서 `build/patches/gif2webp.patch`로 `-resize <w> <h>`,
@@ -117,13 +117,13 @@ WASM ES 모듈로 링크. 래퍼는 가상 FS로 구동: `input.gif` 쓰기 → 
   raw.githubusercontent URL로 참조하므로 main에 push해야 보임(npm `files`에는 없음).
   publish된 tarball의 wasm SHA가 versions.lock과 일치함을 확인. libwebp 버전을
   올릴 땐 패치가 다시 적용되는지 확인할 것.
-- 🚧 **0.0.5: 버그 수정** — 래퍼가 gif2webp에 없는 플래그 두 개를 넘기고 있었음
+- ✅ **0.0.5: 버그 수정 publish됨** — 래퍼가 gif2webp에 없는 플래그 두 개를 넘기고 있었음
   (0.0.1부터). `lossless: true` → `-lossless`, `loopCount` → `-loop_count` 둘 다
   `Unknown option`으로 실패. lossless는 gif2webp 기본값이라 플래그를 빼고
   lossy/mixed와 같이 주면 에러로 처리. loopCount는 패치에 `-loop_count` 덮어쓰기를
   추가(WebP 기준 0 = 무한). 패치 이름은 `gif2webp.patch`로 변경. wasm 재빌드
   (`9a0d5d…`) + headless Chrome QA 완료(0.0.4 옵션 결과는 바이트 단위로 동일).
-  남은 작업: publish.
+  publish된 tarball의 wasm SHA가 versions.lock과 일치함을 확인.
 
 **img2webp** (publish 완료 — 우선순위 2번째 도구, 결정 #1):
 - ✅ 빌드 trio + 코덱(zlib/libpng/libjpeg-turbo) 소스 빌드 스크립트 작성
