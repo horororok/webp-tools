@@ -62,6 +62,9 @@ done
 
 # gif2webp가 유일하게 빌드되는 실행물(다른 도구 전부 OFF)이므로, 전역 EXE 링커
 # 플래그가 이 하나에만 적용된다. callMain + FS를 노출하고 자동 실행을 끄면 JS
+# (stackSave/stackRestore: callMain은 argv를 wasm 스택에 올리고 되돌리지 않아,
+#  같은 모듈로 수백 번 호출하면 스택이 바닥나 크래시/무한 대기가 된다. 래퍼가
+#  호출마다 스택 포인터를 복원한다.)
 # 래퍼가 구동: input.gif 쓰기 -> callMain(args) -> 가상 FS에서 output.webp 읽기.
 #
 # SINGLE_FILE=1: wasm을 mjs glue에 base64로 인라인. 소비자가 별도 .wasm 파일을
@@ -79,7 +82,7 @@ EM_LINK="-O3 \
   -sMODULARIZE=1 \
   -sEXPORT_ES6=1 \
   -sEXPORT_NAME=Gif2Webp \
-  -sEXPORTED_RUNTIME_METHODS=callMain,FS \
+  -sEXPORTED_RUNTIME_METHODS=callMain,FS,stackSave,stackRestore \
   -sINVOKE_RUN=0 \
   -sEXIT_RUNTIME=0 \
   -sALLOW_MEMORY_GROWTH=1 \

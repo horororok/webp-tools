@@ -46,13 +46,29 @@ const webpBytes = await gif2webp(gifBytes, { lossy: true, resize: { width: 1920,
   로드 실패)는 전부 reject로 돌아옵니다.
 - 워커와 wasm은 **첫 호출 때** 만들어지고 받아집니다. import만으로는 아무것도 받지
   않습니다.
-- Vite는 dev와 build 모두 추가 설정 없이 동작합니다(패키지 안의
-  `new Worker(new URL(...), { type: "module" })`를 Vite가 그대로 번들링).
+- 번들러 호환 (npm에서 설치한 상태로 실측):
+
+  | 번들러 | build | dev |
+  |---|---|---|
+  | Vite 8 | 설정 없이 동작 | 설정 없이 동작 |
+  | Vite 5~7 | 설정 없이 동작 | `optimizeDeps.exclude` 필요 (아래) |
+  | webpack 5 | 설정 없이 동작 | — |
+
+  Vite 7 이하 dev 서버는 의존성을 미리 번들링하면서 패키지 안 워커 파일의 경로를 잃습니다.
+  vite.config에 한 줄을 추가하세요. 빠뜨리면 변환이 "워커 오류"로 reject되고, 에러
+  메시지에 이 안내가 함께 나옵니다.
+
+  ```ts
+  export default defineConfig({
+    optimizeDeps: { exclude: ["@btheegg-kimth/gif2webp"] },
+  });
+  ```
 - 실측(2400×1080, 20프레임, Chrome): 메인 스레드 최대 멈춤이 4,179 ms에서 33 ms로
   줄었습니다. 결과 바이트는 메인 스레드 변환과 같습니다.
 - 입력은 기본적으로 복사해서 넘깁니다(5 MB에 1 ms 미만). 원본 바이트를 다시 쓸 일이
   없으면 `{ transfer: true }`로 복사 없이 넘길 수 있지만, 그러면 호출 후 `gifBytes`가
-  비어 버립니다(detach).
+  비어 버립니다(detach). `gifBytes`가 더 큰 버퍼의 일부(view)면 다른 데이터를 지키려고
+  복사로 처리합니다.
 
 #### 워커 수명
 

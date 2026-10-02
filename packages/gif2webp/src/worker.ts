@@ -19,13 +19,16 @@ export type { Gif2WebpOptions, Gif2WebpResize } from "./index";
 export interface Gif2WebpWorkerConfig {
   /**
    * 마지막 작업이 끝난 뒤 워커를 자동 종료하기까지 기다리는 시간(ms). 기본 30000.
-   * 0이면 대기열이 비는 즉시 종료, `Infinity`면 자동 종료하지 않음.
+   * 0이면 대기열이 비는 즉시 종료, `Infinity`(또는 약 24.8일 초과)면 자동 종료하지 않음.
    * 대기열에 작업이 남아 있는 동안에는 종료하지 않는다.
    */
   idleTimeoutMs?: number;
 }
 
 let idleTimeoutMs = 30_000;
+
+// setTimeout은 2^31-1 ms(약 24.8일)를 넘으면 즉시 실행된다. 그보다 길면 "끔"으로 취급.
+const MAX_TIMEOUT_MS = 2_147_483_647;
 
 // 지금 쓰는 공유 워커와 그 워커에 걸린 미완료 작업 수. 워커가 바뀌어도 이전 워커의
 // 작업이 끝나며 카운트를 건드리지 않도록 워커별로 묶어 둔다.
@@ -41,7 +44,7 @@ function clearIdleTimer() {
 function scheduleIdle() {
   clearIdleTimer();
   const cur = shared;
-  if (!cur || cur.inFlight > 0 || idleTimeoutMs === Infinity) return;
+  if (!cur || cur.inFlight > 0 || idleTimeoutMs > MAX_TIMEOUT_MS) return;
   idleTimer = setTimeout(() => {
     idleTimer = undefined;
     if (shared === cur && cur.inFlight === 0) cur.conv.terminate();
@@ -67,10 +70,21 @@ export function configureGif2WebpWorker(config: Gif2WebpWorkerConfig): void {
  * 실패(잘못된 입력, 옵션 오류, 워커 로드 실패, 종료로 끊김)는 모두 reject로 돌아온다.
  */
 export function gif2webp(input: Uint8Array, options?: Gif2WebpWorkerOptions): Promise<Uint8Array> {
+  // 어떤 실패도 동기 throw가 아니라 reject로 돌려준다(`.catch()` 폴백이 항상 타도록).
+  // 예: Worker 미지원 환경/SSR, 보안 정책으로 `new Worker`가 throw하는 경우.
+  try {
+    return start(input, options);
+  } catch (err) {
+    return Promise.reject(err);
+  }
+}
+
+function start(input: Uint8Array, options?: Gif2WebpWorkerOptions): Promise<Uint8Array> {
   clearIdleTimer();
   if (!shared) {
     // `new Worker(new URL(..., import.meta.url))` 모양을 그대로 둬야 Vite/webpack이
     // 워커 파일을 찾아 번들링한다. 경로는 빌드 산출물(dist/) 기준.
+    // (URL을 변수로 빼면 번들러가 워커로 인식하지 못한다. 반드시 이 모양 그대로.)
     const entry: Shared = {
       conv: connect(
         new Worker(new URL("./worker-entry.mjs", import.meta.url), { type: "module" }),
@@ -81,6 +95,8 @@ export function gif2webp(input: Uint8Array, options?: Gif2WebpWorkerOptions): Pr
             clearIdleTimer();
           }
         },
+        "\nVite 7 이하 dev 서버라면 vite.config의 optimizeDeps.exclude에 " +
+          "\"@btheegg-kimth/gif2webp\"를 추가하세요 (README의 \"워커에서 변환\" 참고).",
       ),
       inFlight: 0,
     };

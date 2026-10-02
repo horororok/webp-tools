@@ -27,6 +27,12 @@
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
+  "typesVersions": {
+    "*": {
+      "worker": ["./dist/worker.d.mts"],
+      "worker-entry": ["./dist/worker-entry.d.mts"]
+    }
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",

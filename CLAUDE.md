@@ -66,6 +66,8 @@ packages/gif2webp/
   src/worker.ts     # `/worker`: 같은 시그니처의 gif2webp()를 워커에서 실행 (첫 호출 때 워커 생성)
   src/worker-entry.ts # 워커 안에서 도는 스크립트 (`/worker-entry`, sideEffects로 표시)
   src/client.ts     # postMessage <-> Promise 클라이언트 (createGif2WebpWorker)
+  src/core.ts       # 변환 런타임 (wasm 로더를 인자로 받음: 메인 = 동적 import, 워커 = 정적 import)
+  src/args.ts       # 옵션 -> CLI 인자
   wasm/             # 커밋되는 빌드 산출물 (gif2webp.mjs — wasm 인라인됨)
   licenses/         # 업스트림 라이선스 전문 (빌드가 채움)
 packages/img2webp/
@@ -140,7 +142,23 @@ WASM ES 모듈로 링크. 래퍼는 가상 FS로 구동: `input.gif` 쓰기 → 
   `idleTimeoutMs`(기본 30초, `configureGif2WebpWorker`로 변경, 0 = 즉시, Infinity = 끔)
   동안 요청이 없으면 자동 종료(대기열이 있으면 종료 안 함). `terminateGif2WebpWorker()`로
   수동 종료. 끊긴 작업은 전부 reject. 생성/종료 횟수를 세는 테스트로 dev와 build 둘 다 확인.
-  `createGif2WebpWorker`로 만든 수동 워커는 자동 종료하지 않음. 남은 작업: publish.
+  `createGif2WebpWorker`로 만든 수동 워커는 자동 종료하지 않음.
+  push 전 점검(리뷰 서브에이전트 + 소비자 환경 테스트)에서 찾아 고친 것:
+  - **스택 누수 (0.0.1부터, 메인 스레드도 해당):** emscripten `callMain`은 argv를 wasm
+    스택에 올리고 되돌리지 않는다. 같은 모듈로 425번째 호출에서 크래시, 426번째는 무한
+    대기. → `stackSave`/`stackRestore`를 export하고(wasm 재빌드) 호출마다 복원.
+    ExitStatus가 아닌 예외면 모듈을 버리고 다음 호출 때 새로 만든다.
+  - gif2webp.c 전역 `transparent_index`가 호출 사이에 남음 → 패치에서 main() 시작 때 초기화.
+  - Vite 5~7 build 실패(워커 기본 형식 iife는 동적 import 불가) → 워커는 glue를 정적 import.
+  - Vite 5~7 dev는 의존성 사전 번들링 때문에 워커 경로를 잃음 → 패키지로는 못 고침.
+    소비자가 `optimizeDeps.exclude`에 추가해야 함(README 표, 에러 메시지에도 안내).
+  - `new Worker` 실패 등이 동기 throw였음 → 전부 reject. node10 타입 해석(typesVersions),
+    setTimeout 한도 초과, 부분 view transfer, 워커 쪽 에러 전송 실패 대비.
+  - 주의: `new Worker(new URL(...))`는 반드시 한 식으로 둘 것(URL을 변수로 빼면 번들러가
+    워커로 인식하지 못함).
+  검증: Vite 5/6/7/8 build·dev(41개 항목), webpack 5, tsc bundler/node16/node10, publint,
+  attw, Node import. 회귀 스위트는 600회 연속 변환과 전역 상태 누수 재현을 포함.
+  남은 작업: publish. img2webp도 같은 callMain 스택 누수가 있음(별도 수정 필요).
 
 **img2webp** (publish 완료 — 우선순위 2번째 도구, 결정 #1):
 - ✅ 빌드 trio + 코덱(zlib/libpng/libjpeg-turbo) 소스 빌드 스크립트 작성
