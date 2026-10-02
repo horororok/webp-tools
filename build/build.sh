@@ -52,7 +52,7 @@ tar xf libwebp.tar.gz
 cd "libwebp-${LIBWEBP_VERSION}"
 cp COPYING "$OUT/libwebp-LICENSE.txt" 2>/dev/null || true
 
-# 우리 패치 적용 (build/patches/*.patch). 현재: gif2webp 리사이즈 옵션.
+# 우리 패치 적용 (build/patches/*.patch). 현재: gif2webp 리사이즈 + 루프 횟수 옵션.
 # 업스트림 버전을 올렸는데 적용이 실패하면 여기서 빌드가 멈춘다 — 패치를
 # 새 소스 기준으로 다시 만들 것.
 for p in /work/patches/*.patch; do

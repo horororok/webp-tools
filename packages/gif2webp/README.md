@@ -33,24 +33,26 @@ const blob = new Blob([webpBytes], { type: "image/webp" });
 
 ### 옵션
 
-`gif2webp` CLI 플래그에 매핑:
+`gif2webp` CLI 플래그에 매핑. 아무 옵션도 안 주면 `{ quality: 75 }`, 인코딩은 gif2webp
+기본값인 lossless입니다.
 
 | 옵션 | 플래그 | 비고 |
 |------|--------|------|
 | `quality` | `-q` | 0..100, 기본 75 |
 | `method` | `-m` | 0..6, 높을수록 느리고 작음 |
 | `mixed` | `-mixed` | 프레임별 lossy/lossless |
-| `lossy` / `lossless` | `-lossy` / `-lossless` | |
+| `lossy` | `-lossy` | |
+| `lossless` | — | 기본값이라 플래그 없음. `lossy`/`mixed`와 같이 주면 에러 |
 | `minimizeSize` | `-min_size` | |
 | `metadata` | `-metadata` | `all` \| `none` \| `icc` \| `xmp` |
-| `loopCount` | `-loop_count` | |
+| `loopCount` | `-loop_count` (패치) | 0 = 무한. 생략하면 GIF 값을 따름 |
 | `resize` | `-resize` (패치) | 아래 참고 |
 | `extraArgs` | — | 원시 전달 |
 
 ### 리사이즈
 
 애니메이션을 유지한 채 캔버스 크기를 바꿉니다. 업스트림 gif2webp에는 없는 기능이라
-`build/patches/gif2webp-resize.patch`로 추가했습니다.
+`build/patches/gif2webp.patch`로 추가했습니다.
 
 ```ts
 // 긴 변 1920 상한: 넘으면 비율 유지하며 축소, 작으면 그대로

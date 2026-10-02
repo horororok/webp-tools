@@ -19,13 +19,19 @@ export interface Gif2WebpOptions {
   mixed?: boolean;
   /** lossy 인코딩 강제 (-lossy). */
   lossy?: boolean;
-  /** lossless 인코딩 강제 (-lossless). */
+  /**
+   * lossless 인코딩. gif2webp의 기본값이라 넘기는 플래그는 없음(gif2webp에는
+   * `-lossless` 플래그 자체가 없다). `lossy`/`mixed`와 함께 주면 에러.
+   */
   lossless?: boolean;
   /** 출력 크기 최소화 (-min_size). */
   minimizeSize?: boolean;
   /** 유지할 메타데이터 (-metadata). 기본 동작은 CLI를 따름. */
   metadata?: "all" | "none" | "icc" | "xmp";
-  /** 출력 애니메이션의 루프 횟수 (-loop_count N). */
+  /**
+   * 출력 애니메이션의 루프 횟수 (-loop_count N, 우리 패치). WebP 기준이라
+   * 0 = 무한, N = N번 재생. 생략하면 GIF에 들어 있는 값을 따름. 0..65535.
+   */
   loopCount?: number;
   /**
    * 캔버스 리사이즈 (-resize, 우리 패치). 애니메이션은 그대로 유지됨.
@@ -61,12 +67,21 @@ function toArgs(opts: Gif2WebpOptions): string[] {
   const a: string[] = [];
   if (opts.mixed) a.push("-mixed");
   if (opts.lossy) a.push("-lossy");
-  if (opts.lossless) a.push("-lossless");
+  // lossless는 기본값이라 플래그 없음. 모순된 조합만 막는다.
+  if (opts.lossless && (opts.lossy || opts.mixed)) {
+    throw new RangeError("gif2webp: lossless는 lossy/mixed와 함께 쓸 수 없음");
+  }
   if (opts.minimizeSize) a.push("-min_size");
   if (opts.quality != null) a.push("-q", String(opts.quality));
   if (opts.method != null) a.push("-m", String(opts.method));
   if (opts.metadata != null) a.push("-metadata", opts.metadata);
-  if (opts.loopCount != null) a.push("-loop_count", String(opts.loopCount));
+  if (opts.loopCount != null) {
+    const n = opts.loopCount;
+    if (!Number.isInteger(n) || n < 0 || n > 65535) {
+      throw new RangeError(`gif2webp: loopCount는 0..65535 정수여야 함 (받은 값: ${n})`);
+    }
+    a.push("-loop_count", String(n));
+  }
   if (opts.resize) a.push(...resizeArgs(opts.resize));
   if (opts.extraArgs?.length) a.push(...opts.extraArgs);
   // 입력 다음 출력
