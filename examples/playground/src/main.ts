@@ -1,4 +1,5 @@
 import { gif2webp } from "@btheegg-kimth/gif2webp";
+import { gif2webp as gif2webpInWorker } from "@btheegg-kimth/gif2webp/worker";
 import { img2webp } from "@btheegg-kimth/img2webp";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -27,6 +28,19 @@ const gifOut = $<HTMLImageElement>("gifOut");
 const gifInInfo = $<HTMLPreElement>("gifInInfo");
 const gifOutInfo = $<HTMLPreElement>("gifOutInfo");
 const gifMax = $<HTMLInputElement>("gifMax");
+const gifUseWorker = $<HTMLInputElement>("gifUseWorker");
+const gifStall = $<HTMLElement>("gifStall");
+
+// 메인 스레드 멈춤 측정 + JS 스피너. rAF 간격의 최댓값을 기록한다.
+const spinner = document.querySelector<HTMLElement>(".spinner")!;
+let maxGap = 0;
+let last = performance.now();
+(function tick(now: number) {
+  maxGap = Math.max(maxGap, now - last);
+  last = now;
+  spinner.style.transform = `rotate(${(now / 2) % 360}deg)`;
+  requestAnimationFrame(tick);
+})(last);
 
 // 미리보기 <img>가 로드된 뒤 실제 픽셀 크기를 info에 덧붙인다(리사이즈 QA용).
 function appendSize(img: HTMLImageElement, info: HTMLPreElement) {
@@ -58,9 +72,17 @@ async function runGif(input: Uint8Array) {
       ? { lossy: true, quality: 75, resize: { width: max, height: max } }
       : { quality: 75 };
 
+    // 상태 문구가 먼저 그려지도록 한 번 양보한 뒤 측정 시작.
+    await new Promise((r) => requestAnimationFrame(() => setTimeout(r)));
+    const useWorker = gifUseWorker.checked;
+    maxGap = 0;
+    last = performance.now();
     const t0 = performance.now();
-    const out = await gif2webp(input, options);
+    const out = useWorker ? await gif2webpInWorker(input, options) : await gif2webp(input, options);
     const ms = (performance.now() - t0).toFixed(1);
+    // 마지막 rAF 이후 구간까지 포함.
+    const stall = Math.max(maxGap, performance.now() - last);
+    gifStall.textContent = `${stall.toFixed(0)} ms (${useWorker ? "워커" : "메인 스레드"})`;
 
     const head = new TextDecoder("ascii").decode(out.subarray(0, 4));
     const fmt = new TextDecoder("ascii").decode(out.subarray(8, 12));

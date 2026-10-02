@@ -1,6 +1,6 @@
 {
   "name": "@btheegg-kimth/gif2webp",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Animated GIF -> animated WebP in the browser, via libwebp gif2webp compiled to WASM.",
   "license": "MIT",
   "author": "btheegg-kimth",
@@ -21,7 +21,9 @@
     "browser"
   ],
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/worker-entry.mjs"
+  ],
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
@@ -29,6 +31,14 @@
     ".": {
       "types": "./dist/index.d.mts",
       "import": "./dist/index.mjs"
+    },
+    "./worker": {
+      "types": "./dist/worker.d.mts",
+      "import": "./dist/worker.mjs"
+    },
+    "./worker-entry": {
+      "types": "./dist/worker-entry.d.mts",
+      "import": "./dist/worker-entry.mjs"
     },
     "./package.json": "./package.json"
   },

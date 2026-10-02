@@ -13,6 +13,10 @@
       pre { background: #f6f6f6; padding: 0.75rem; border-radius: 4px; overflow: auto; }
       .ok { color: #137333; }
       .err { color: #c5221f; }
+      .spinner-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+      /* 일부러 JS(메인 스레드)로 돌리는 스피너 — 메인 스레드가 막히면 같이 멈춘다. */
+      .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid #999;
+                 border-top-color: transparent; border-radius: 50%; }
     </style>
   </head>
   <body>
@@ -32,6 +36,14 @@
           <input type="number" id="gifMax" min="1" placeholder="예: 1920" style="width: 7em" /></label>
         — 긴 변 기준(<code>{ width: N, height: N }</code>), 확대 안 함, lossy q75
       </p>
+
+      <p>
+        <label><input type="checkbox" id="gifUseWorker" /> 워커에서 변환
+          (<code>@btheegg-kimth/gif2webp/worker</code>)</label>
+      </p>
+      <p class="spinner-row"><span class="spinner"></span>
+        메인 스레드 최대 멈춤: <strong id="gifStall">-</strong>
+        <small>(변환 중 requestAnimationFrame 간격의 최댓값. 워커면 수십 ms 이하여야 함)</small></p>
 
       <div id="gifStatus"></div>
 

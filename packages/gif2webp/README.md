@@ -31,6 +31,64 @@ const blob = new Blob([webpBytes], { type: "image/webp" });
 // ...presigned URL로 S3에 업로드 등
 ```
 
+### 워커에서 변환 (페이지 멈춤 방지)
+
+위 `gif2webp()`는 변환하는 동안 메인 스레드를 막습니다. 큰 GIF는 몇 초씩 페이지 전체가
+멈춥니다. import 경로만 바꾸면 같은 함수가 Web Worker에서 돌아갑니다.
+
+```ts
+import { gif2webp } from "@btheegg-kimth/gif2webp/worker";
+
+const webpBytes = await gif2webp(gifBytes, { lossy: true, resize: { width: 1920, height: 1920 } });
+```
+
+- 시그니처, 옵션, 결과는 메인 스레드용과 같습니다. 실패(잘못된 입력, 옵션 오류, 워커
+  로드 실패)는 전부 reject로 돌아옵니다.
+- 워커와 wasm은 **첫 호출 때** 만들어지고 받아집니다. import만으로는 아무것도 받지
+  않습니다.
+- Vite는 dev와 build 모두 추가 설정 없이 동작합니다(패키지 안의
+  `new Worker(new URL(...), { type: "module" })`를 Vite가 그대로 번들링).
+- 실측(2400×1080, 20프레임, Chrome): 메인 스레드 최대 멈춤이 4,179 ms에서 33 ms로
+  줄었습니다. 결과 바이트는 메인 스레드 변환과 같습니다.
+- 입력은 기본적으로 복사해서 넘깁니다(5 MB에 1 ms 미만). 원본 바이트를 다시 쓸 일이
+  없으면 `{ transfer: true }`로 복사 없이 넘길 수 있지만, 그러면 호출 후 `gifBytes`가
+  비어 버립니다(detach).
+
+#### 워커 수명
+
+- 마지막 작업이 끝나고 **30초** 동안 요청이 없으면 워커를 자동으로 종료해 메모리를
+  돌려줍니다. 새 요청이 오면 타이머가 다시 시작되고, 대기열에 작업이 남아 있으면
+  종료하지 않습니다. 종료된 뒤 호출하면 워커를 새로 만듭니다(wasm 초기화가 다시 일어남).
+- 대기 시간은 `configureGif2WebpWorker({ idleTimeoutMs })`로 바꿉니다. `0`이면 대기열이
+  비는 즉시 종료하고, `Infinity`면 자동 종료하지 않습니다.
+- `terminateGif2WebpWorker()`로 바로 종료할 수 있습니다(예: 로그아웃). 진행 중이거나
+  대기 중인 변환은 reject됩니다.
+- 종료나 워커 오류로 끊긴 변환은 항상 reject됩니다. 응답 없이 계속 기다리는 일은 없습니다.
+
+```ts
+import { configureGif2WebpWorker, terminateGif2WebpWorker } from "@btheegg-kimth/gif2webp/worker";
+
+configureGif2WebpWorker({ idleTimeoutMs: 10_000 }); // 10초로 단축
+// 로그아웃 시
+terminateGif2WebpWorker();
+```
+
+번들러가 패키지 안의 워커를 처리하지 못하면, 워커 파일을 직접 두고 연결할 수 있습니다.
+이 경우 워커는 직접 만든 것이라 자동 종료하지 않으니, 다 쓰면 `conv.terminate()`를
+호출하세요.
+
+```ts
+// gif2webp.worker.ts
+import "@btheegg-kimth/gif2webp/worker-entry";
+
+// 사용하는 쪽
+import { createGif2WebpWorker } from "@btheegg-kimth/gif2webp/worker";
+const conv = createGif2WebpWorker(
+  new Worker(new URL("./gif2webp.worker.ts", import.meta.url), { type: "module" }),
+);
+await conv.gif2webp(gifBytes, { lossy: true });
+```
+
 ### 옵션
 
 `gif2webp` CLI 플래그에 매핑. 아무 옵션도 안 주면 `{ quality: 75 }`, 인코딩은 gif2webp
@@ -93,6 +151,7 @@ await gif2webp(bytes, { resize: { width: 640, height: 640, fit: "fill", withoutE
   니다. 업로드 경로에서만 `gif2webp`를 import하면 메인 번들이 부풀지 않습니다.
 - **pthread 비활성** 빌드이므로 COOP/COEP 헤더, SharedArrayBuffer 등 추가 요구사
   항 없음 — Vite/Webpack/Next 등 일반 환경에서 그대로 동작.
-- 호출은 내부 mutex로 직렬화 — `Promise.all`로 여러 GIF를 동시 변환해도 안전.
+- 호출은 내부 mutex로 직렬화 — `Promise.all`로 여러 GIF를 동시 변환해도 안전
+  (워커 버전도 같음).
 - libwebp(BSD-3-Clause) + giflib(MIT)로 빌드됨. `THIRD_PARTY_LICENSES.md` 참고.
 - 래퍼 코드는 MIT.

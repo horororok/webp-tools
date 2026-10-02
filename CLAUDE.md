@@ -62,7 +62,10 @@ build/
   versions.env               # 핀 박은 버전들 (emsdk/libwebp/giflib + 코덱 3종)
   versions.lock              # 산출물 SHA-256
 packages/gif2webp/
-  src/index.ts      # 타입 래퍼: gif2webp(Uint8Array, opts) -> Uint8Array
+  src/index.ts      # 타입 래퍼: gif2webp(Uint8Array, opts) -> Uint8Array (메인 스레드)
+  src/worker.ts     # `/worker`: 같은 시그니처의 gif2webp()를 워커에서 실행 (첫 호출 때 워커 생성)
+  src/worker-entry.ts # 워커 안에서 도는 스크립트 (`/worker-entry`, sideEffects로 표시)
+  src/client.ts     # postMessage <-> Promise 클라이언트 (createGif2WebpWorker)
   wasm/             # 커밋되는 빌드 산출물 (gif2webp.mjs — wasm 인라인됨)
   licenses/         # 업스트림 라이선스 전문 (빌드가 채움)
 packages/img2webp/
@@ -124,6 +127,20 @@ WASM ES 모듈로 링크. 래퍼는 가상 FS로 구동: `input.gif` 쓰기 → 
   추가(WebP 기준 0 = 무한). 패치 이름은 `gif2webp.patch`로 변경. wasm 재빌드
   (`9a0d5d…`) + headless Chrome QA 완료(0.0.4 옵션 결과는 바이트 단위로 동일).
   publish된 tarball의 wasm SHA가 versions.lock과 일치함을 확인.
+- 🚧 **0.0.6: 워커 API** — `import { gif2webp } from "@btheegg-kimth/gif2webp/worker"`.
+  메인 스레드용과 시그니처가 같고, 첫 호출 때 패키지 안에서
+  `new Worker(new URL("./worker-entry.mjs", import.meta.url), { type: "module" })`로
+  워커를 만든다. wasm은 그대로(재빌드 없음). 입력은 기본 복사(5 MB에 1 ms 미만),
+  `transfer: true`로 복사 없이 넘길 수 있음. 워커 로드 실패 시 닫고 다음 호출 때 다시
+  만든다. 검증: **npm pack tarball을 설치한 별도 Vite 8 프로젝트**에서 dev와 build를 둘 다
+  확인(workspace 링크인 playground는 Vite 의존성 사전 번들링을 거치지 않아 검증이 안 됨).
+  최대 멈춤 4,179 ms → 33 ms, 결과는 바이트 단위로 동일, 첫 호출 전엔 워커/wasm 미요청.
+  주의: `sideEffects: false`였을 때 `import "…/worker-entry"`가 tree-shake돼 수동
+  경로가 0 kB가 됐음 → `sideEffects`에 worker-entry만 표시. 공유 워커는 마지막 작업 후
+  `idleTimeoutMs`(기본 30초, `configureGif2WebpWorker`로 변경, 0 = 즉시, Infinity = 끔)
+  동안 요청이 없으면 자동 종료(대기열이 있으면 종료 안 함). `terminateGif2WebpWorker()`로
+  수동 종료. 끊긴 작업은 전부 reject. 생성/종료 횟수를 세는 테스트로 dev와 build 둘 다 확인.
+  `createGif2WebpWorker`로 만든 수동 워커는 자동 종료하지 않음. 남은 작업: publish.
 
 **img2webp** (publish 완료 — 우선순위 2번째 도구, 결정 #1):
 - ✅ 빌드 trio + 코덱(zlib/libpng/libjpeg-turbo) 소스 빌드 스크립트 작성
@@ -163,7 +180,9 @@ img2webp 트랙 (✅ 전부 완료 — 0.0.1 publish됨):
 ## 에이전트용 컨벤션
 
 - wasm은 **lazy-load** 유지(첫 `gif2webp()` 호출 때만) — 소비자 메인 번들 부풀지
-  않도록. 이미 dynamic import로 로드됨.
+  않도록. 이미 dynamic import로 로드됨. 워커 버전도 첫 호출 때 워커를 만든다.
+- 번들러 동작(워커, sideEffects, 사전 번들링)이 걸린 변경은 workspace playground가
+  아니라 `npm pack` tarball을 설치한 별도 Vite 프로젝트에서 dev와 build를 둘 다 확인할 것.
 - emscripten glue/wasm을 tsdown으로 번들하지 말 것 — `wasm/`에서 그대로 배포
   (`tsdown.config.js`의 `deps.neverBundle`). wasm 로딩이 유일하게 DX 민감한
   부분이니 번들러 비종속적으로 유지(타겟: Vite 소비자).
