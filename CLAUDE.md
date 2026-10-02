@@ -104,9 +104,9 @@ WASM ES 모듈로 링크. 래퍼는 가상 FS로 구동: `input.gif` 쓰기 → 
 - ✅ 래퍼 wasm 로딩 확정 (emit된 glue 모양과 매칭)
 - ✅ 브라우저 실측 검증 (`pnpm qa` → playground에서 실 GIF 변환 확인)
 - ✅ TS 6.0 + tsdown 빌드 파이프라인 확정
-- ✅ 0.0.1 → 0.0.2 (pthread 제거 + SINGLE_FILE) → 0.0.3 (node 제외) publish됨
+- ✅ 0.0.1 → 0.0.2 (pthread 제거 + SINGLE_FILE) → 0.0.3 (node 제외) → 0.0.4 (리사이즈) publish됨
 - 📌 검증은 수동 QA (`pnpm qa`) — Node 자동 스모크는 ENVIRONMENT=web,worker라 불가
-- 🚧 **0.0.4: 리사이즈 옵션** — `resize?: { width, height, fit, withoutEnlargement }`.
+- ✅ **0.0.4: 리사이즈 옵션 publish됨** — `resize?: { width, height, fit, withoutEnlargement }`.
   업스트림에 없어서 `build/patches/gif2webp-resize.patch`로 `-resize <w> <h>`,
   `-resize_fit`, `-resize_down_only` 플래그를 추가했다(소스 빌드 + 감사 가능 패치라
   결정 #2와 맞음). 핵심: `curr_canvas`는 다음 프레임 blend/dispose가 GIF 좌표로
@@ -115,8 +115,8 @@ WASM ES 모듈로 링크. 래퍼는 가상 FS로 구동: `input.gif` 쓰기 → 
   (`gif2webp.mjs = ab9237…`), headless Chrome에서 wasm 결과가 네이티브 결과와
   바이트 단위로 같음을 확인. README 예시 이미지는 `packages/gif2webp/docs/`에 있고
   raw.githubusercontent URL로 참조하므로 main에 push해야 보임(npm `files`에는 없음).
-  남은 작업: push → `npm publish`. libwebp 버전을 올릴 땐 패치가 다시 적용되는지
-  확인할 것.
+  publish된 tarball의 wasm SHA가 versions.lock과 일치함을 확인. libwebp 버전을
+  올릴 땐 패치가 다시 적용되는지 확인할 것.
 
 **img2webp** (publish 완료 — 우선순위 2번째 도구, 결정 #1):
 - ✅ 빌드 trio + 코덱(zlib/libpng/libjpeg-turbo) 소스 빌드 스크립트 작성
