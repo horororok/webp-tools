@@ -27,6 +27,11 @@
 
       <input type="file" id="gifFile" accept="image/gif" />
       <button id="gifSample">내장 샘플 GIF로 테스트</button>
+      <p>
+        <label>리사이즈 상한(px, 비우면 원본):
+          <input type="number" id="gifMax" min="1" placeholder="예: 1920" style="width: 7em" /></label>
+        — 긴 변 기준(<code>{ width: N, height: N }</code>), 확대 안 함, lossy q75
+      </p>
 
       <div id="gifStatus"></div>
 

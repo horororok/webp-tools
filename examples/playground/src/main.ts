@@ -26,6 +26,14 @@ const gifIn = $<HTMLImageElement>("gifIn");
 const gifOut = $<HTMLImageElement>("gifOut");
 const gifInInfo = $<HTMLPreElement>("gifInInfo");
 const gifOutInfo = $<HTMLPreElement>("gifOutInfo");
+const gifMax = $<HTMLInputElement>("gifMax");
+
+// 미리보기 <img>가 로드된 뒤 실제 픽셀 크기를 info에 덧붙인다(리사이즈 QA용).
+function appendSize(img: HTMLImageElement, info: HTMLPreElement) {
+  img.onload = () => {
+    info.textContent += `\nsize: ${img.naturalWidth} x ${img.naturalHeight}`;
+  };
+}
 
 // 내장 2프레임 1x1 애니메이션 GIF.
 const SAMPLE_GIF = new Uint8Array([
@@ -41,19 +49,26 @@ const SAMPLE_GIF = new Uint8Array([
 async function runGif(input: Uint8Array) {
   try {
     setStatus(gifStatus, "변환 중…", true);
+    appendSize(gifIn, gifInInfo);
     previewInto(gifIn, input, "image/gif");
     gifInInfo.textContent = `${input.length} bytes\nmagic: ${magic(input)}`;
 
+    const max = gifMax.valueAsNumber;
+    const options = Number.isFinite(max)
+      ? { lossy: true, quality: 75, resize: { width: max, height: max } }
+      : { quality: 75 };
+
     const t0 = performance.now();
-    const out = await gif2webp(input, { quality: 75 });
+    const out = await gif2webp(input, options);
     const ms = (performance.now() - t0).toFixed(1);
 
     const head = new TextDecoder("ascii").decode(out.subarray(0, 4));
     const fmt = new TextDecoder("ascii").decode(out.subarray(8, 12));
     if (head !== "RIFF" || fmt !== "WEBP") throw new Error(`출력이 WebP가 아님 (${head}/${fmt})`);
 
+    appendSize(gifOut, gifOutInfo);
     previewInto(gifOut, out, "image/webp");
-    gifOutInfo.textContent = `${out.length} bytes\nmagic: ${magic(out)}`;
+    gifOutInfo.textContent = `${out.length} bytes\nmagic: ${magic(out)}\noptions: ${JSON.stringify(options)}`;
     setStatus(gifStatus, `✓ 변환 성공: ${input.length} → ${out.length} bytes (${ms} ms)`, true);
   } catch (err) {
     setStatus(gifStatus, `✗ 실패: ${(err as Error).message}`, false);

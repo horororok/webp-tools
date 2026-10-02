@@ -20,6 +20,13 @@ import { gif2webp } from "@btheegg-kimth/gif2webp";
 const gifBytes = new Uint8Array(await file.arrayBuffer());
 const webpBytes = await gif2webp(gifBytes, { mixed: true, quality: 75 });
 
+// 해상도 상한을 걸고 싶다면 (긴 변 1920, 작은 GIF는 그대로)
+const capped = await gif2webp(gifBytes, {
+  mixed: true,
+  quality: 75,
+  resize: { width: 1920, height: 1920 },
+});
+
 const blob = new Blob([webpBytes], { type: "image/webp" });
 // ...presigned URL로 S3에 업로드 등
 ```
@@ -37,7 +44,46 @@ const blob = new Blob([webpBytes], { type: "image/webp" });
 | `minimizeSize` | `-min_size` | |
 | `metadata` | `-metadata` | `all` \| `none` \| `icc` \| `xmp` |
 | `loopCount` | `-loop_count` | |
+| `resize` | `-resize` (패치) | 아래 참고 |
 | `extraArgs` | — | 원시 전달 |
+
+### 리사이즈
+
+애니메이션을 유지한 채 캔버스 크기를 바꿉니다. 업스트림 gif2webp에는 없는 기능이라
+`build/patches/gif2webp-resize.patch`로 추가했습니다.
+
+```ts
+// 긴 변 1920 상한: 넘으면 비율 유지하며 축소, 작으면 그대로
+await gif2webp(bytes, { lossy: true, quality: 75, resize: { width: 1920, height: 1920 } });
+
+// 너비만 800 상한
+await gif2webp(bytes, { lossy: true, resize: { width: 800 } });
+
+// 정확히 640×640 (비율 무시, 확대 허용)
+await gif2webp(bytes, { resize: { width: 640, height: 640, fit: "fill", withoutEnlargement: false } });
+```
+
+| 필드 | 기본 | 의미 |
+|------|------|------|
+| `width` / `height` | — | 목표 크기(px). 하나는 필수, 생략한 쪽은 비율 유지 |
+| `fit` | `"inside"` | `"inside"`: 박스 안에 비율 유지 · `"fill"`: 정확히 width×height |
+| `withoutEnlargement` | `true` | 어느 한 변이라도 커지게 되면 리사이즈하지 않음 |
+
+#### 예시
+
+`{ lossy: true, quality: 75, resize: { width: 640, height: 640 } }`
+
+| 입력 GIF · 1280×720 · 596 KB | 출력 WebP · 640×360 · 177 KB |
+|:---:|:---:|
+| <img src="https://raw.githubusercontent.com/horororok/webp-tools/main/packages/gif2webp/docs/demo.gif" width="360" alt="입력 GIF 1280×720"> | <img src="https://raw.githubusercontent.com/horororok/webp-tools/main/packages/gif2webp/docs/demo-resized.webp" width="360" alt="출력 WebP 640×360"> |
+
+20프레임 애니메이션이 그대로 유지됩니다. 같은 옵션에서 리사이즈만 빼면 1280×720,
+503 KB입니다. 출력 이미지는 이 패키지의 wasm으로 브라우저(Chrome)에서 직접 변환한
+결과입니다(`docs/` 폴더, npm 패키지에는 포함되지 않음).
+
+> 축소하면 보간 때문에 GIF 팔레트에 없던 색이 생겨서, 기본 lossless 인코딩에서는
+> 결과가 **오히려 커질 수 있습니다**. 리사이즈할 때는 `lossy: true` 또는
+> `mixed: true`를 함께 쓰세요.
 
 ## 비고
 

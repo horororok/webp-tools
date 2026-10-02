@@ -20,13 +20,14 @@ ARG GIFLIB_VERSION=5.2.2
 ENV LIBWEBP_VERSION=${LIBWEBP_VERSION} \
     GIFLIB_VERSION=${GIFLIB_VERSION}
 
-# emsdk 이미지엔 cmake/make/python이 이미 들어있고, curl만 추가한다.
+# emsdk 이미지엔 cmake/make/python이 이미 들어있고, curl + patch만 추가한다.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl ca-certificates cmake \
+    && apt-get install -y --no-install-recommends curl ca-certificates cmake patch \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /work
 COPY build.sh /work/build.sh
+COPY patches/ /work/patches/
 RUN chmod +x /work/build.sh && /work/build.sh
 
 # 추출 전용 스테이지: 산출물 외엔 아무것도 없어서

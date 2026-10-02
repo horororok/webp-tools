@@ -52,6 +52,14 @@ tar xf libwebp.tar.gz
 cd "libwebp-${LIBWEBP_VERSION}"
 cp COPYING "$OUT/libwebp-LICENSE.txt" 2>/dev/null || true
 
+# 우리 패치 적용 (build/patches/*.patch). 현재: gif2webp 리사이즈 옵션.
+# 업스트림 버전을 올렸는데 적용이 실패하면 여기서 빌드가 멈춘다 — 패치를
+# 새 소스 기준으로 다시 만들 것.
+for p in /work/patches/*.patch; do
+  echo ">> 패치 적용: $(basename "$p")"
+  patch -p1 --forward < "$p"
+done
+
 # gif2webp가 유일하게 빌드되는 실행물(다른 도구 전부 OFF)이므로, 전역 EXE 링커
 # 플래그가 이 하나에만 적용된다. callMain + FS를 노출하고 자동 실행을 끄면 JS
 # 래퍼가 구동: input.gif 쓰기 -> callMain(args) -> 가상 FS에서 output.webp 읽기.

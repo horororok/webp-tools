@@ -27,8 +27,31 @@ export interface Gif2WebpOptions {
   metadata?: "all" | "none" | "icc" | "xmp";
   /** 출력 애니메이션의 루프 횟수 (-loop_count N). */
   loopCount?: number;
+  /**
+   * 캔버스 리사이즈 (-resize, 우리 패치). 애니메이션은 그대로 유지됨.
+   * 예: `{ width: 1920, height: 1920 }` = 긴 변 1920 상한 (작은 GIF는 그대로).
+   *
+   * 축소 보간으로 팔레트에 없던 색이 생겨 lossless(기본)로는 오히려 커질 수
+   * 있으니 `lossy` 또는 `mixed`와 함께 쓰는 것을 권장.
+   */
+  resize?: Gif2WebpResize;
   /** 탈출구: 추가 원시 CLI 인자를 그대로 덧붙임. */
   extraArgs?: string[];
+}
+
+export interface Gif2WebpResize {
+  /** 목표 너비(px). 생략하면 높이 기준으로 비율 유지. */
+  width?: number;
+  /** 목표 높이(px). 생략하면 너비 기준으로 비율 유지. */
+  height?: number;
+  /**
+   * `"inside"`(기본): width×height 박스 안에 비율 유지하며 맞춤.
+   * `"fill"`: 비율 무시하고 정확히 width×height로 늘이거나 줄임.
+   * 한 변만 주면 둘 다 비율 유지로 동일하게 동작.
+   */
+  fit?: "inside" | "fill";
+  /** true(기본)면 확대하지 않음 — 원본이 이미 작으면 그대로 둠. */
+  withoutEnlargement?: boolean;
 }
 
 const INPUT = "input.gif";
@@ -44,9 +67,29 @@ function toArgs(opts: Gif2WebpOptions): string[] {
   if (opts.method != null) a.push("-m", String(opts.method));
   if (opts.metadata != null) a.push("-metadata", opts.metadata);
   if (opts.loopCount != null) a.push("-loop_count", String(opts.loopCount));
+  if (opts.resize) a.push(...resizeArgs(opts.resize));
   if (opts.extraArgs?.length) a.push(...opts.extraArgs);
   // 입력 다음 출력
   a.push(INPUT, "-o", OUTPUT);
+  return a;
+}
+
+function resizeArgs(r: Gif2WebpResize): string[] {
+  const dim = (v: number | undefined, name: string): number => {
+    if (v == null) return 0; // CLI에서 0 = 비율 유지
+    if (!Number.isInteger(v) || v <= 0) {
+      throw new RangeError(`gif2webp: resize.${name}는 양의 정수여야 함 (받은 값: ${v})`);
+    }
+    return v;
+  };
+  const w = dim(r.width, "width");
+  const h = dim(r.height, "height");
+  if (w === 0 && h === 0) {
+    throw new RangeError("gif2webp: resize에는 width나 height 중 하나는 있어야 함");
+  }
+  const a = ["-resize", String(w), String(h)];
+  if ((r.fit ?? "inside") === "inside") a.push("-resize_fit");
+  if (r.withoutEnlargement ?? true) a.push("-resize_down_only");
   return a;
 }
 
@@ -102,6 +145,8 @@ export async function gif2webp(
   input: Uint8Array,
   options: Gif2WebpOptions = { quality: 75 },
 ): Promise<Uint8Array> {
+  // 옵션 검증(잘못된 resize 등)은 큐/가상 FS를 건드리기 전에.
+  const args = toArgs(options);
   const prev = queue;
   let release!: () => void;
   queue = new Promise<void>((r) => (release = r));
@@ -112,7 +157,7 @@ export async function gif2webp(
     stderrLines.length = 0; // 이번 호출분만 캡처
     mod.FS.writeFile(INPUT, input);
     try {
-      mod.callMain(toArgs(options));
+      mod.callMain(args);
     } catch (err: unknown) {
       // EXIT_RUNTIME=0이면 Emscripten은 성공 시에도 ExitStatus를 던진다.
       const status = (err as { name?: string; status?: number } | null);

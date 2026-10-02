@@ -53,7 +53,8 @@ libwebp 코어 + 하나의 빌드 파이프라인을 공유합니다. 목표는 
 ```
 build/
   Dockerfile                 # gif2webp: emscripten 환경 + scratch 'export' 스테이지
-  build.sh                   # giflib + libwebp + gif2webp -> wasm
+  build.sh                   # giflib + libwebp + gif2webp -> wasm (patches/ 적용)
+  patches/                   # 업스트림 소스 패치 (gif2webp-resize.patch)
   build-docker.sh            # 호스트: docker build --output -> packages/gif2webp/wasm/
   Dockerfile.img2webp        # img2webp: 입력 디코더(zlib/png/jpeg) 소스 빌드 추가
   build-img2webp.sh          # zlib+libpng+libjpeg-turbo + libwebp + img2webp -> wasm
@@ -105,6 +106,17 @@ WASM ES 모듈로 링크. 래퍼는 가상 FS로 구동: `input.gif` 쓰기 → 
 - ✅ TS 6.0 + tsdown 빌드 파이프라인 확정
 - ✅ 0.0.1 → 0.0.2 (pthread 제거 + SINGLE_FILE) → 0.0.3 (node 제외) publish됨
 - 📌 검증은 수동 QA (`pnpm qa`) — Node 자동 스모크는 ENVIRONMENT=web,worker라 불가
+- 🚧 **0.0.4: 리사이즈 옵션** — `resize?: { width, height, fit, withoutEnlargement }`.
+  업스트림에 없어서 `build/patches/gif2webp-resize.patch`로 `-resize <w> <h>`,
+  `-resize_fit`, `-resize_down_only` 플래그를 추가했다(소스 빌드 + 감사 가능 패치라
+  결정 #2와 맞음). 핵심: `curr_canvas`는 다음 프레임 blend/dispose가 GIF 좌표로
+  쓰므로 **복사본**을 `WebPPictureRescale`로 줄여 Add해야 함(제자리 rescale 금지).
+  네이티브 빌드 + ASan으로 크기, 픽셀, 투명도를 검증함. wasm 빌드 완료
+  (`gif2webp.mjs = ab9237…`), headless Chrome에서 wasm 결과가 네이티브 결과와
+  바이트 단위로 같음을 확인. README 예시 이미지는 `packages/gif2webp/docs/`에 있고
+  raw.githubusercontent URL로 참조하므로 main에 push해야 보임(npm `files`에는 없음).
+  남은 작업: push → `npm publish`. libwebp 버전을 올릴 땐 패치가 다시 적용되는지
+  확인할 것.
 
 **img2webp** (publish 완료 — 우선순위 2번째 도구, 결정 #1):
 - ✅ 빌드 trio + 코덱(zlib/libpng/libjpeg-turbo) 소스 빌드 스크립트 작성
