@@ -209,6 +209,8 @@ img2webp 트랙 (✅ 전부 완료 — 0.0.1 publish됨):
 
 ## 에이전트용 컨벤션
 
+- **커밋 메시지와 PR 본문에 `Co-Authored-By: Claude ...` 같은 AI 트레일러나
+  "Generated with Claude Code" 같은 문구를 붙이지 말 것.** 메시지는 본문만 쓴다.
 - wasm은 **lazy-load** 유지(첫 `gif2webp()` 호출 때만) — 소비자 메인 번들 부풀지
   않도록. 이미 dynamic import로 로드됨. 워커 버전도 첫 호출 때 워커를 만든다.
 - 번들러 동작(워커, sideEffects, 사전 번들링)이 걸린 변경은 workspace playground가
